@@ -36,6 +36,8 @@ get live reloading, nor a REPL.
 
 ## License
 
+`carbon.vdom` based on the [vdom](https://github.com/exupero/vdom) by Eric Shull [LICENSE](https://github.com/exupero/vdom/blob/master/LICENSE)
+
 Copyright © 2015 Ruslan Prokopchuk
 
 Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
