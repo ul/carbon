@@ -1,24 +1,45 @@
 (ns carbon.vdom.hook)
 
-(deftype Hook [hook! unhook! args]
+(deftype Hook [h u a]
+
   Object
-  (data [_] args)
-  (hook [_ node prop prev]
-    (hook! node prop prev))
-  (unhook [_ node prop next]
-    (unhook! node prop next)))
+  (hook [this node prop prev]
+    (h this node prop prev))
+  (unhook [this node prop next]
+    (u this node prop next))
 
-(def noop (constantly nil))
+  IDeref
+  (-deref [_]
+    @a)
 
-(defn hook
-  ([hook!] (Hook. hook! noop nil))
-  ([hook! unhook!] (Hook. hook! unhook! nil))
-  ([hook! unhook! data] (Hook. hook! unhook! data)))
+  IReset
+  (-reset! [_ new-value]
+    (reset! a new-value))
 
-(defn unhook
-  ([unhook!] (Hook. noop unhook! nil))
-  ([unhook! data] (Hook. noop unhook! data)))
+  ISwap
+  (-swap! [_ f]
+    (swap! a f))
+  (-swap! [_ f x]
+    (swap! a f x))
+  (-swap! [_ f x y]
+    (swap! a f x y))
+  (-swap! [_ f x y xs]
+    (apply swap! a f x y xs)))
+
+(aset Hook "prototype" "type" "Hook")
 
 (goog/exportSymbol "Hook" Hook)
 (goog/exportSymbol "Hook.prototype.hook" Hook.prototype.hook)
 (goog/exportSymbol "Hook.prototype.unhook" Hook.prototype.unhook)
+
+
+(def noop (constantly nil))
+
+(defn hook
+  ([h] (hook h noop nil))
+  ([h u] (hook h u nil))
+  ([h u a] (Hook. h u (atom a))))
+
+(defn unhook
+  ([u] (hook noop u nil))
+  ([u a] (hook noop u a)))

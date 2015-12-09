@@ -5,5 +5,6 @@ return VDOM = {
   h: require("virtual-dom/h"),
   svg: require("virtual-dom/virtual-hyperscript/svg"),
   VText: require("virtual-dom/vnode/vtext"),
+  VNode: require("virtual-dom/vnode/vnode"),
   Delegator: require('dom-delegator')
 }

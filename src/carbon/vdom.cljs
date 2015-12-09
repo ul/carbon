@@ -1,17 +1,16 @@
 (ns carbon.vdom
-  "TODO: rx-attribute hook"
-  (:require-macros [cljs.core.async.macros :refer [go-loop]])
   (:require js.vdom
-            [cljs.core.async :as async]
+            clojure.data
             [carbon.rx :as rx :include-macros true]
-            [carbon.vdom.hook :refer [hook]]))
+            [carbon.vdom.hook :refer [hook]]
+            [carbon.vdom.widget :refer [widget]]))
 
 (def diff js/VDOM.diff)
 (def patch js/VDOM.patch)
 (def create js/VDOM.create)
 (def html js/VDOM.h)
 (def svg js/VDOM.svg)
-(def d (js/VDOM.Delegator.))
+(def delegator (js/VDOM.Delegator.))
 
 (defn flatten-children [children]
   (->> children
@@ -22,12 +21,18 @@
 (defn text-node [s]
   (js/VDOM.VText. (str s)))
 
+(defn map->js [x]
+  (let [y (js-obj)]
+    (doseq [[k v] x]
+      (aset y (name k) v))
+    y))
+
 (defn node [f tag attrs children]
-  (f (name tag) (clj->js attrs) (clj->js children)))
+  {:pre [(#{svg html} f) (or (keyword? tag) (string? tag)) (map? attrs) (coll? children)]
+   :post [(instance? js/VDOM.VNode %)]}
+  (f (name tag) (map->js attrs) (apply array children)))
 
-(declare svg-tree)
-
-(declare renderer)
+(declare svg-tree component)
 
 (defn remove-children [elem]
   (loop []
@@ -35,32 +40,14 @@
       (.removeChild elem c)
       (recur))))
 
-(defn mount [elem view]
-  (let [r (or (.-renderer elem) (renderer elem))]
-    (set! (.-renderer elem) r)
-    (add-watch view ::mount (fn [_ _ _ view] (r view)))
-    (r @view)))
-
-(defn unmount [elem view]
-  (when view (remove-watch view ::mount))
-  (remove-children elem))
-
-(defn mount-hook [[f & xs]]
-  (let [view (volatile! nil)]
-    (hook
-      (fn [elem _ _]
-        (mount elem (vreset! view (rx/rx (apply f xs)))))
-      (fn [elem _ next]
-        (when-not next
-          (unmount elem @view))))))
-
 (defn html-tree [arg]
   (cond
     (vector? arg)
     (let [[tag attrs & children] arg]
+      (assert (map? attrs))
       (cond
         (fn? tag)
-        (node html :span {:mount (mount-hook arg)} [])
+        (component html-tree tag children (:key attrs))
 
         (= :svg tag)
         (node svg tag attrs (map svg-tree (flatten-children children)))
@@ -78,9 +65,10 @@
   (cond
     (vector? arg)
     (let [[tag attrs & children] arg]
+      (assert (map? attrs))
       (cond
         (fn? tag)
-        (node svg :g {:mount (mount-hook arg)} [])
+        (component svg-tree tag children (:key attrs))
 
         :else
         (node svg tag attrs
@@ -92,37 +80,73 @@
     :else
     (text-node arg)))
 
-
 ;;; Render batching
 
+(def schedule
+  (or (and (exists? js/window)
+           (or js/window.requestAnimationFrame
+               js/window.webkitRequestAnimationFrame
+               js/window.mozRequestAnimationFrame
+               js/window.msRequestAnimationFrame
+               js/window.oRequestAnimationFrame))
+      #(js/setTimeout % 16)))
 
-(def raf
-  (or
-    (.-requestAnimationFrame js/window)
-    (.-webkitRequestAnimationFrame js/window)
-    (.-mozRequestAnimationFrame js/window)
-    (.-msRequestAnimationFrame js/window)
-    (.-oRequestAnimationFrame js/window)
-    (let [t0 (.getTime (js/Date.))]
-      (fn [f]
-        (js/setTimeout
-          #(f (- (.getTime (js/Date.)) t0))
-          16.66666)))))
+(defn compare-by [keyfn]
+  (fn [x y]
+    (compare (keyfn x) (keyfn y))))
 
-(defn renderer [elem]
-  (let [tree (atom (text-node nil))
-        root (atom (create @tree))
-        !view (async/chan (async/sliding-buffer 1))
-        !raf (async/chan (async/sliding-buffer 1))
-        !render (async/map identity [!view !raf] (async/sliding-buffer 1))]
-    (.appendChild elem @root)
-    (go-loop []
-      (when-let [view (async/<! !render)]
-        (let [new-tree (html-tree view)
-              patches (diff @tree new-tree)]
-          (reset! tree new-tree)
-          (swap! root patch patches))
-        (recur)))
+;(def empty-queue (sorted-set-by (compare-by rank)))
+(def empty-queue #{})
+(def render-queue (volatile! empty-queue))
+
+(defn render []
+  (let [queue @render-queue]
+    (vreset! render-queue empty-queue)
+    (doseq [f queue]
+      (f))))
+
+(defn request-render [component]
+  (when (empty? @render-queue)
+    (schedule render))
+  (vswap! render-queue conj component))
+
+(defn renderer [tree-builder]
+  (let [tree (volatile! (text-node nil))
+        root (volatile! (create @tree))]
     (fn [view]
-      (async/put! !view view)
-      (raf #(async/put! !raf true)))))
+      (let [new-tree (tree-builder view)
+            patches (diff @tree new-tree)]
+        (vreset! tree new-tree)
+        (vswap! root patch patches)))))
+
+;;; Components
+
+(defn component [t f xs key]
+  (let [w (widget
+            (fn [this]
+              (let [r (renderer t)
+                    v (rx/rx (apply f xs))
+                    f #(r @v)]
+                (swap! this assoc :view v)
+                (add-watch v :render #(request-render f))
+                (f)))
+            (fn [this prev node]
+              (if (= (:args @this) (:args @prev))
+                (do
+                  (swap! this assoc :view (:view @prev))
+                  nil)
+                (do
+                  (.destroy prev)
+                  (.init this))))
+            (fn [this node]
+              (remove-watch (:view @this) :render))
+            {:args [t f xs]})]
+    (aset w "key" key)
+    w))
+
+(defn mount [elem view]
+  (let [r (renderer html-tree)]
+    (.appendChild elem (r view))))
+
+(defn unmount [elem]
+  (remove-children elem))

@@ -2641,7 +2641,8 @@ return VDOM = {
   h: require("virtual-dom/h"),
   svg: require("virtual-dom/virtual-hyperscript/svg"),
   VText: require("virtual-dom/vnode/vtext"),
+  VNode: require("virtual-dom/vnode/vnode"),
   Delegator: require('dom-delegator')
 }
 
-},{"dom-delegator":6,"virtual-dom/create-element":16,"virtual-dom/diff":17,"virtual-dom/h":18,"virtual-dom/patch":19,"virtual-dom/virtual-hyperscript/svg":32,"virtual-dom/vnode/vtext":42}]},{},[48]);
+},{"dom-delegator":6,"virtual-dom/create-element":16,"virtual-dom/diff":17,"virtual-dom/h":18,"virtual-dom/patch":19,"virtual-dom/virtual-hyperscript/svg":32,"virtual-dom/vnode/vnode":40,"virtual-dom/vnode/vtext":42}]},{},[48]);

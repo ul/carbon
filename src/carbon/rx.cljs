@@ -25,15 +25,15 @@
 (defn watch [_ source o n]
   (when (not= o n)
     (if *queue*
-      (swap! *queue* update (get-rank source) conj* source)
-      (propagate! (atom {(get-rank source) #{source}})))))
+      (vswap! *queue* update (get-rank source) conj* source)
+      (propagate! (volatile! {(get-rank source) #{source}})))))
 
 (defn register [source]
   (when *rx*                                                ; *rank* too
     (add-watch source ::rx watch)
     (add-sink source *rx*)
     (add-source *rx* source)
-    (swap! *rank* max (get-rank source))))
+    (vswap! *rank* max (get-rank source))))
 
 (defn level-up! [queue rank]
   (reduce
@@ -43,16 +43,19 @@
     (apply s/union (map get-sinks (get queue rank)))))
 
 (defn propagate! [queue]
-  (loop [rank 0]
-    (swap! queue level-up! rank)
-    (when-let [rank (apply min (keys @queue))]
-      (binding [*queue* queue]
-        (doseq [sink (get @queue rank)]
-          (compute sink)))
-      (recur rank))))
+  (loop [rank 0 processed '()]
+    (vswap! queue level-up! rank)
+    (if-let [rank (apply min (keys @queue))]
+      (do (binding [*queue* queue]
+            (doseq [sink (get @queue rank)]
+              (compute sink)
+              (conj processed sink)))
+          (recur rank processed))
+      (doseq [sink processed]
+        (uncompute sink)))))
 
 (defn dosync* [f]
-  (let [queue (or *queue* (atom {}))]
+  (let [queue (or *queue* (volatile! {}))]
     (binding [*queue* queue] (f))
     (propagate! queue)))
 
@@ -84,7 +87,7 @@
       (remove-sink source this))
     (set! sources #{})
     (let [old-value state
-          r (atom -1)
+          r (volatile! -1)
           new-value (binding [*rx* this
                               *rank* r]
                       (getter))]
