@@ -128,26 +128,32 @@
 (defn init-component [this]
   (let [[t f xs] (:args @this)
         render (renderer t)
-        initital-view (apply f xs)
-        form-2? (fn? initital-view)
-        view (if form-2?
-               (rx/rx (apply initital-view xs))
-               (rx/rx (apply f xs)))
-        update #(render @view)]
-    (swap! this assoc :view view)
-    (add-watch view :render #(request-render update))
+        view (apply f xs)
+        form-2? (fn? view)
+        xs (rx/cell xs)
+        rx-view (if form-2?
+                  (rx/rx (apply view @xs))
+                  (rx/rx (apply f @xs)))
+        update #(render @rx-view)]
+    (swap! this assoc :view rx-view :xs xs)
+    (add-watch rx-view :render #(request-render update))
     (if form-2?
       (update)
-      (render initital-view))))
+      (render view))))
 
 (defn update-component [this prev node]
-  (if (= (:args @this) (:args @prev))
-    (do
-      (swap! this assoc :view (:view @prev))
-      nil)
-    (do
-      (.destroy prev)
-      (.init this))))
+  (let [[t0 f0 xs0] (:args @prev)
+        [t1 f1 xs1] (:args @this)]
+    (if (and (= t0 t1) (= f0 f1))
+      (when (not= xs0 xs1)
+        (let [{:keys [view xs]} @prev]
+          (swap! this assoc :view view :xs xs)
+          (reset! xs xs1)
+          nil                                               ; nil-return is important to keep previous node
+          ))
+      (do
+        (.destroy prev)
+        (.init this)))))
 
 (defn destroy-component [this node]
   (remove-watch (:view @this) :render))
