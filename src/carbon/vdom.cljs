@@ -3,7 +3,8 @@
             clojure.data
             [carbon.rx :as rx :include-macros true]
             [carbon.vdom.hook :refer [hook]]
-            [carbon.vdom.widget :refer [widget]]))
+            [carbon.vdom.widget :refer [widget]]
+            [cljs.test :refer-macros [is]]))
 
 (def diff js/VDOM.diff)
 (def patch js/VDOM.patch)
@@ -28,8 +29,11 @@
     y))
 
 (defn node [f tag attrs children]
-  {:pre [(#{svg html} f) (or (keyword? tag) (string? tag)) (map? attrs) (coll? children)]
-   :post [(instance? js/VDOM.VNode %)]}
+  {:pre  [(is (#{svg html} f))
+          (is (or (keyword? tag) (string? tag)))
+          (is (map? attrs))
+          (is (coll? children))]
+   :post [(is (instance? js/VDOM.VNode %))]}
   (f (name tag) (map->js attrs) (apply array children)))
 
 (declare svg-tree component)
@@ -95,7 +99,7 @@
   (fn [x y]
     (compare (keyfn x) (keyfn y))))
 
-;(def empty-queue (sorted-set-by (compare-by rank)))
+;(def empty-queue (sorted-set-by (compare-by rank-hash)))
 (def empty-queue #{})
 (def render-queue (volatile! empty-queue))
 
@@ -121,28 +125,37 @@
 
 ;;; Components
 
+(defn init-component [this]
+  (let [[t f xs] (:args @this)
+        render (renderer t)
+        initital-view (apply f xs)
+        form-2? (fn? initital-view)
+        view (if form-2?
+               (rx/rx (apply initital-view xs))
+               (rx/rx (apply f xs)))
+        update #(render @view)]
+    (swap! this assoc :view view)
+    (add-watch view :render #(request-render update))
+    (if form-2?
+      (update)
+      (render initital-view))))
+
+(defn update-component [this prev node]
+  (if (= (:args @this) (:args @prev))
+    (do
+      (swap! this assoc :view (:view @prev))
+      nil)
+    (do
+      (.destroy prev)
+      (.init this))))
+
+(defn destroy-component [this node]
+  (remove-watch (:view @this) :render))
+
 (defn component [t f xs key]
-  (let [w (widget
-            (fn [this]
-              (let [r (renderer t)
-                    v (rx/rx (apply f xs))
-                    f #(r @v)]
-                (swap! this assoc :view v)
-                (add-watch v :render #(request-render f))
-                (f)))
-            (fn [this prev node]
-              (if (= (:args @this) (:args @prev))
-                (do
-                  (swap! this assoc :view (:view @prev))
-                  nil)
-                (do
-                  (.destroy prev)
-                  (.init this))))
-            (fn [this node]
-              (remove-watch (:view @this) :render))
-            {:args [t f xs]})]
-    (aset w "key" key)
-    w))
+  (doto
+    (widget init-component update-component destroy-component {:args [t f xs]})
+    (aset "key" key)))
 
 (defn mount [elem view]
   (let [r (renderer html-tree)]
