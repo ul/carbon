@@ -6,7 +6,7 @@
   `(carbon.rx/rx* (fn [] ~@body)))
 
 (defmacro lens [getter setter]
-  `(carbon.rx/rx* (fn [] getter) (fn [] setter)))
+  `(carbon.rx/rx* (fn [] ~getter) (fn [] ~setter)))
 
 (defmacro dosync [& body]
   `(carbon.rx/dosync* (fn [] ~@body)))
