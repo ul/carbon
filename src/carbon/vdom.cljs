@@ -116,12 +116,11 @@
     (schedule render))
   (vswap! render-queue conj component))
 
-(defn renderer [tree-builder]
+(defn renderer []
   (let [tree (volatile! (text-node nil))
         root (volatile! (create @tree))]
-    (fn [view]
-      (let [new-tree (tree-builder view)
-            patches (diff @tree new-tree)]
+    (fn [new-tree]
+      (let [patches (diff @tree new-tree)]
         (vreset! tree new-tree)
         (vswap! root patch patches)))))
 
@@ -129,30 +128,29 @@
 
 (defn init-component [this]
   (let [[t f xs] (:args @this)
-        render (renderer t)
+        render (renderer)
         view (apply f xs)
         form-2? (fn? view)
         xs (rx/cell xs)
         rx-view (if form-2?
-                  (rx/rx (apply view @xs))
-                  (rx/rx (apply f @xs)))
+                  (rx/rx (t (apply view @xs)))
+                  (rx/rx (t (apply f @xs))))
         update #(render @rx-view)]
     (swap! this assoc :view rx-view :xs xs)
     (add-watch rx-view :render #(request-render update))
     (if form-2?
       (update)
-      (render view))))
+      (render (t view)))))
 
 (defn update-component [this prev node]
   (let [[t0 f0 xs0] (:args @prev)
         [t1 f1 xs1] (:args @this)]
     (if (and (= t0 t1) (= f0 f1))
-      (when (not= xs0 xs1)
-        (let [{:keys [view xs]} @prev]
-          (swap! this assoc :view view :xs xs)
-          (reset! xs xs1)
-          nil                                               ; nil-return is important to keep previous node
-          ))
+      (let [{:keys [view xs]} @prev]
+        (swap! this assoc :view view :xs xs)
+        (reset! xs xs1)
+        nil                                                 ; nil-return is important to keep previous node
+        )
       (do
         (.destroy prev)
         (.init this)))))
@@ -167,10 +165,10 @@
 
 (defn mount [elem view]
   (if-let [r (aget elem "__carbon_renderer")]
-    (r view)
-    (let [r (renderer html-tree)]
+    (r (html-tree view))
+    (let [r (renderer)]
       (aset elem "__carbon_renderer" r)
-      (.appendChild elem (r view)))))
+      (.appendChild elem (r (html-tree view))))))
 
 (defn unmount [elem]
   (aset elem "__carbon_renderer" nil)
