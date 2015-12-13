@@ -164,8 +164,12 @@
     (aset "key" key)))
 
 (defn mount [elem view]
-  (let [r (renderer html-tree)]
-    (.appendChild elem (r view))))
+  (if-let [r (aget elem "__carbon_renderer")]
+    (r view)
+    (let [r (renderer html-tree)]
+      (aset elem "__carbon_renderer" r)
+      (.appendChild elem (r view)))))
 
 (defn unmount [elem]
+  (aset elem "__carbon_renderer" nil)
   (remove-children elem))
