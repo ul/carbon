@@ -24,8 +24,8 @@
 
 (defn map->js [x]
   (let [y (js-obj)]
-    (doseq [[k v] x]
-      (aset y (name k) v))
+    (doseq [[k v] x :when (some? v)]
+      (aset y (name k) (if (map? v) (map->js v) v)))
     y))
 
 (defn node [f tag attrs children]
