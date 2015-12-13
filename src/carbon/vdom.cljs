@@ -44,20 +44,25 @@
       (.removeChild elem c)
       (recur))))
 
+(defn parse-arg [[tag & [attrs & children :as args] :as form]]
+  (let [full? (map? attrs)]
+    [tag
+     (let [attrs (if full? attrs {})]
+       (if-let [key (-> form meta :key)]
+         (assoc attrs :key key)
+         attrs))
+     (if full? children args)]))
+
 (defn html-tree [arg]
   (cond
     (vector? arg)
-    (let [[tag attrs & children] arg]
-      (assert (map? attrs))
-      (cond
-        (fn? tag)
-        (component html-tree tag children (:key attrs))
-
-        (= :svg tag)
-        (node svg tag attrs (map svg-tree (flatten-children children)))
-
-        :else
-        (node html tag attrs (map html-tree (flatten-children children)))))
+    (let [tag (get arg 0)]
+      (if (fn? tag)
+        (component html-tree tag (subvec arg 1) (-> arg meta :key))
+        (let [[tag attrs children] (parse-arg arg)]
+          (if (= :svg tag)
+            (node svg tag attrs (map svg-tree (flatten-children children)))
+            (node html tag attrs (map html-tree (flatten-children children)))))))
 
     (seq? arg)
     (node html :div {} (map html-tree (flatten-children arg)))
@@ -68,15 +73,12 @@
 (defn svg-tree [arg]
   (cond
     (vector? arg)
-    (let [[tag attrs & children] arg]
-      (assert (map? attrs))
-      (cond
-        (fn? tag)
-        (component svg-tree tag children (:key attrs))
-
-        :else
-        (node svg tag attrs
-              (map (if (= :foreignObject tag) html-tree svg-tree) (flatten-children children)))))
+    (let [tag (get arg 0)]
+      (if (fn? tag)
+        (component svg-tree tag (subvec arg 1) (-> arg meta :key))
+        (let [[tag attrs children] (parse-arg arg)]
+          (node svg tag attrs
+                (map (if (= :foreignObject tag) html-tree svg-tree) (flatten-children children))))))
 
     (seq? arg)
     (node svg :g {} (map svg-tree (flatten-children arg)))
