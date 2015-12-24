@@ -8,7 +8,7 @@
                  [org.clojure/clojurescript "1.7.189"]
                  [org.clojure/core.async "0.2.374"]]
 
-  :plugins [[lein-cljsbuild "1.1.1"]
+  :plugins [[lein-cljsbuild "1.1.2"]
             [lein-figwheel "0.5.0-2"]]
 
   :source-paths ["src"]
