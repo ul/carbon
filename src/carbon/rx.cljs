@@ -1,5 +1,4 @@
-(ns carbon.rx
-  "TODO: optimize performance with transients and transducers")
+(ns carbon.rx)
 
 (defprotocol IReactiveSource
   (get-rank [_])
@@ -30,11 +29,9 @@
   (binding [*rx* nil *rank* nil]                            ; try to be foolproof
     (loop [queue queue dirty '()]
       (if-let [x (first queue)]
-        (let [queue (disj queue x)
-              dirty (conj dirty x)]
-          (if (= @x (compute x))
-            (recur queue dirty)
-            (recur (into queue (get-sinks x)) dirty)))
+        (let [queue (disj queue x)]
+          (recur (if (= @x (compute x)) queue (->> x get-sinks (into queue)))
+                 (conj dirty x)))
         dirty))))
 
 (defn propagate! [queue]
