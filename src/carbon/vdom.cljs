@@ -112,10 +112,10 @@
       (f))))
 
 (defn request-render [component]
-  (component)
-  #_(when (empty? @render-queue)
+  #_(component)
+  (when (empty? @render-queue)
     (schedule render))
-  #_(vswap! render-queue conj component))
+  (vswap! render-queue conj component))
 
 (defn renderer []
   (let [tree (volatile! (text-node nil))

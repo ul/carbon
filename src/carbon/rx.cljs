@@ -45,9 +45,10 @@
     (vswap! *rank* max (get-rank source))))
 
 (defn dosync* [f]
-  (let [queue (or *queue* (volatile! empty-queue))]
-    (binding [*queue* queue] (f))
-    (propagate! @queue)))
+  (let [queue (or *queue* (volatile! empty-queue))
+        result (binding [*queue* queue] (f))]
+    (propagate! @queue)
+    result))
 
 (deftype ReactiveExpression [getter setter meta validator
                              ^:mutable state ^:mutable watches
@@ -167,6 +168,8 @@
         (register this)
         (add-watch this ::rx watch)
         (.-state this)))))
+
+(def $ cell)
 
 (defn rx*
   ([getter] (rx* getter nil nil nil))

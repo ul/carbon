@@ -5,6 +5,9 @@
 (defmacro rx [& body]
   `(carbon.rx/rx* (fn [] ~@body)))
 
+(defmacro $$ [& body]
+  `(carbon.rx/rx* (fn [] ~@body)))
+
 (defmacro lens [getter setter]
   `(carbon.rx/rx* (fn [] ~getter) ~setter))
 
