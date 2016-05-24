@@ -111,11 +111,13 @@
     (doseq [f queue]
       (f))))
 
-(defn request-render [component]
-  #_(component)
+#_(defn request-render [component]
   (when (empty? @render-queue)
     (schedule render))
   (vswap! render-queue conj component))
+
+(defn request-render [component]
+  (component))
 
 (defn renderer []
   (let [tree (volatile! (text-node nil))
@@ -164,13 +166,12 @@
     (widget init-component update-component destroy-component {:args [t f xs]})
     (aset "key" key)))
 
-(defn mount [elem view]
-  (if-let [r (aget elem "__carbon_renderer")]
-    (r (html-tree view))
-    (let [r (renderer)]
-      (aset elem "__carbon_renderer" r)
-      (.appendChild elem (r (html-tree view))))))
-
 (defn unmount [elem]
   (aset elem "__carbon_renderer" nil)
   (remove-children elem))
+
+(defn mount [elem view]
+  (unmount elem)
+  (let [r (renderer)]
+    (aset elem "__carbon_renderer" r)
+    (.appendChild elem (r (html-tree view)))))
