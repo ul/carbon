@@ -35,13 +35,18 @@
   (rx/dosync
     (swap! state execute spec ctx event)))
 
-(defn one-of
+(defn on
   "Returns a function which detects if the first element of its second argument is in `xs` set.
   This is convenient for writing input/transition conditions based on matching element type
   represented as the first vector element (if you use sum type for events)"
   [& xs]
   (let [s (set xs)]
     (fn [_ [y]]
+      (contains? s y))))
+
+(defn with [& xs]
+  (let [s (set xs)]
+    (fn [_ [_ y]]
       (contains? s y))))
 
 (defn and-fn [& preds]
