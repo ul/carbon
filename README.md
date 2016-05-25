@@ -6,33 +6,25 @@ Yet another ClojureScript VDOM FRP library.
 
 ## Overview
 
-Coming soon!
+On the surface, Carbon is similar to Reagent but has a number of implementation
+details taken differently. First of all, it is not React but
+[virtual-dom](https://github.com/Matt-Esch/virtual-dom) based.
+virtual-dom is not only more lightweight and fast, it allows us to perform
+unique optimization: Carbon components are mounted to the parent's DOM node as
+[Widgets](https://github.com/Matt-Esch/virtual-dom/blob/master/docs/widget.md)
+with their own standalone virtual trees. It means that when you trigger
+component update you don't touch its ancestors at all.
+Second main difference is reactive part implementation.
+Carbon's reactive `cell` (cf. Reagent's `atom`) and
+`rx` (cf. Reagent's `reaction`) are modelled after
+[Javelin](https://github.com/hoplon/javelin) and
+[freactive.core](https://github.com/aaronc/freactive.core) taking the best from both.
+Carbon's reactive expressions provide glitch-free changes propagation,
+fully dynamic dependency graph and they are GC-friendly.
 
-## Setup
+## Contribution
 
-To get an interactive development environment run:
-
-    lein figwheel
-
-and open your browser at [localhost:3449](http://localhost:3449/).
-This will auto compile and send all changes to the browser without the
-need to reload. After the compilation process is complete, you will
-get a Browser Connected REPL. An easy way to try it is:
-
-    (js/alert "Am I connected?")
-
-and you should see an alert in the browser window.
-
-To clean all compiled files:
-
-    lein clean
-
-To create a production build run:
-
-    lein cljsbuild once min
-
-And open your browser in `resources/public/index.html`. You will not
-get live reloading, nor a REPL. 
+... is welcomed and very much appreciated! Feel free to ping me with questions and to make PRs.
 
 ## License
 
