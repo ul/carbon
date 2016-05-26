@@ -3,7 +3,7 @@
   "version": "",
   "description": "",
   "devDependencies": {
-    "browserify": "^13.0.0",
+    "browserify": "^13.0.1",
     "dom-delegator": "^13.1.0",
     "uglify": "^0.1.5",
     "virtual-dom": "^2.1.1"

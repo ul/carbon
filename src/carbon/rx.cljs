@@ -89,6 +89,10 @@
     (doseq [source sources]
       (remove-sink source this))
     (set! sources #{})
+    ;; FIXME disable provenance and cycle detection in prod build
+    (when (contains? (set *provenance*) this)
+      (print *provenance*)
+      (throw (js/Error. "Cycle detected!")))
     (let [old-value state
           r (volatile! 0)
           new-value (binding [*rx* this

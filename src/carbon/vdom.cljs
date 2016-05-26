@@ -22,6 +22,8 @@
 (defn text-node [s]
   (js/VDOM.VText. (str s)))
 
+(def empty-node (text-node nil))
+
 (defn map->js [x]
   (let [y (js-obj)]
     (doseq [[k v] x :when (some? v)]
@@ -111,16 +113,13 @@
     (doseq [f queue]
       (f))))
 
-#_(defn request-render [component]
+(defn request-render [component]
   (when (empty? @render-queue)
     (schedule render))
   (vswap! render-queue conj component))
 
-(defn request-render [component]
-  (component))
-
 (defn renderer []
-  (let [tree (volatile! (text-node nil))
+  (let [tree (volatile! empty-node)
         root (volatile! (create @tree))]
     (fn [new-tree]
       (let [patches (diff @tree new-tree)]
@@ -129,28 +128,30 @@
 
 ;;; Components
 
+(defn render-component [_ rx-view _ view]
+  ((-> rx-view meta (get :render)) view))
+
 (defn init-component [this]
-  (let [[t f xs] (:args @this)
+  (let [[t f xs] (get @this :args)
         render (renderer)
         view (apply f xs)
         form-2? (fn? view)
         xs (rx/cell xs)
-        rx-view (if form-2?
-                  (rx/rx (t (apply view @xs)))
-                  (rx/rx (t (apply f @xs))))
-        update #(render @rx-view)]
-    (swap! this assoc :view rx-view :xs xs)
-    (add-watch rx-view :render #(request-render update))
-    (if form-2?
-      (update)
-      (render (t view)))))
+        rx-view (rx/rx* (if form-2?
+                          #(t (apply view @xs))
+                          #(t (apply f @xs)))
+                        nil
+                        {:render render})]
+    (swap! this assoc :render render :view rx-view :xs xs)
+    (add-watch rx-view :render render-component)
+    (render (if form-2? @rx-view (t view)))))
 
 (defn update-component [this prev node]
   (let [[t0 f0 xs0] (:args @prev)
         [t1 f1 xs1] (:args @this)]
     (if (and (= t0 t1) (= f0 f1))
-      (let [{:keys [view xs]} @prev]
-        (swap! this assoc :view view :xs xs)
+      (let [{:keys [render view xs]} @prev]
+        (swap! this assoc :render render :view view :xs xs)
         (reset! xs xs1)
         nil                                                 ; nil-return is important to keep previous node
         )
@@ -159,7 +160,9 @@
         (.init this)))))
 
 (defn destroy-component [this node]
-  (remove-watch (:view @this) :render))
+  (let [{:keys [render view]} @this]
+    (remove-watch view :render)
+    (render empty-node)))
 
 (defn component [t f xs key]
   (doto
@@ -167,11 +170,13 @@
     (aset "key" key)))
 
 (defn unmount [elem]
-  (aset elem "__carbon_renderer" nil)
-  (remove-children elem))
+  (when-let [r (aget elem "__carbon_renderer")]
+    (r empty-node))
+  (aset elem "__carbon_renderer" nil))
 
 (defn mount [elem view]
-  (unmount elem)
-  (let [r (renderer)]
-    (aset elem "__carbon_renderer" r)
-    (.appendChild elem (r (html-tree view)))))
+  (rx/dosync
+    (unmount elem)
+    (let [r (renderer)]
+      (aset elem "__carbon_renderer" r)
+      (.appendChild elem (r (html-tree view))))))
