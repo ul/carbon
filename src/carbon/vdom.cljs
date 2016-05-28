@@ -141,6 +141,8 @@
 (defn render-component [_ _ _ component]
   (request-render component))
 
+(def noop (constantly nil))
+
 (defn init-component [this]
   (let [[t f xs] (get @this :args)
         render (comp (renderer) t)
@@ -148,13 +150,13 @@
         form-2? (fn? view)
         f (if form-2? view f)
         xs (rx/cell xs)
-        component (rx/rx* (fn [] [render (apply f @xs)])
+        component (rx/rx* #(render (apply f @xs))
                           #(reset! xs %)
                           nil nil
                           #(render nil))]
     (swap! this assoc :component component)
-    (add-watch component :render render-component)
-    (render (get @component 1))))
+    (add-watch component :render noop)
+    @component))
 
 (defn update-component [this prev node]
   (let [[t0 f0 xs0] (:args @prev)
