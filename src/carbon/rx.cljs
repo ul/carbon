@@ -90,7 +90,7 @@
       (remove-sink source this))
     (set! sources #{})
     (when (and ^boolean js/goog.DEBUG
-               (contains? (set *provenance*) this))
+               (some #(identical? this %) *provenance*))
       (throw (js/Error. (str "carbon.rx: detected a cycle in computation graph!\n"
                              (pr-str *provenance*)))))
     (let [old-value state
