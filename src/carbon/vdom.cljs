@@ -114,11 +114,7 @@
                js/window.oRequestAnimationFrame))
       #(js/setTimeout % 16)))
 
-(defn compare-by [keyfn]
-  (fn [x y]
-    (compare (keyfn x) (keyfn y))))
-
-(def empty-queue (sorted-set-by (compare-by (comp hash first))))
+(def empty-queue {})
 (def render-queue (volatile! empty-queue))
 
 (defn render []
@@ -127,10 +123,10 @@
     (doseq [[render view] queue]
       (render view))))
 
-(defn request-render [component]
+(defn request-render [[f x]]
   (when (empty? @render-queue)
     (schedule render))
-  (vswap! render-queue conj component))
+  (vswap! render-queue assoc f x))
 
 (defn renderer []
   (let [tree (volatile! empty-node)
@@ -142,8 +138,8 @@
 
 ;;; Components
 
-(defn render-component [_ rx-view _ view]
-  (request-render [(-> rx-view meta (get :render)) view]))
+(defn render-component [_ _ _ component]
+  (request-render component))
 
 (defn init-component [this]
   (let [[t f xs] (get @this :args)
@@ -152,20 +148,21 @@
         form-2? (fn? view)
         f (if form-2? view f)
         xs (rx/cell xs)
-        view (rx/rx* #(apply f @xs)
-                     #(reset! xs %)
-                     {:render render})]
-    (swap! this assoc :render render :view view)
-    (add-watch view :render render-component)
-    (render @view)))
+        component (rx/rx* (fn [] [render (apply f @xs)])
+                          #(reset! xs %)
+                          nil nil
+                          #(render nil))]
+    (swap! this assoc :component component)
+    (add-watch component :render render-component)
+    (render (get @component 1))))
 
 (defn update-component [this prev node]
   (let [[t0 f0 xs0] (:args @prev)
         [t1 f1 xs1] (:args @this)]
     (if (and (= t0 t1) (= f0 f1))
-      (let [{:keys [render view]} @prev]
-        (swap! this assoc :render render :view view)
-        (reset! view xs1)
+      (let [{:keys [component]} @prev]
+        (swap! this assoc :component component)
+        (reset! component xs1)
         nil                                                 ; nil-return is important to keep previous node
         )
       (do
@@ -173,9 +170,7 @@
         (.init this)))))
 
 (defn destroy-component [this node]
-  (let [{:keys [render view]} @this]
-    (remove-watch view :render)
-    (request-render [render nil])))
+  (remove-watch (get @this :component) :render))
 
 (defn component [t f xs key]
   (doto
