@@ -118,15 +118,14 @@
   (fn [x y]
     (compare (keyfn x) (keyfn y))))
 
-;(def empty-queue (sorted-set-by (compare-by rank-hash)))
-(def empty-queue #{})
+(def empty-queue (sorted-set-by (compare-by (comp hash first))))
 (def render-queue (volatile! empty-queue))
 
 (defn render []
   (let [queue @render-queue]
     (vreset! render-queue empty-queue)
-    (doseq [f queue]
-      (f))))
+    (doseq [[render view] queue]
+      (render view))))
 
 (defn request-render [component]
   (when (empty? @render-queue)
@@ -144,7 +143,7 @@
 ;;; Components
 
 (defn render-component [_ rx-view _ view]
-  ((-> rx-view meta (get :render)) view))
+  (request-render [(-> rx-view meta (get :render)) view]))
 
 (defn init-component [this]
   (let [[t f xs] (get @this :args)
