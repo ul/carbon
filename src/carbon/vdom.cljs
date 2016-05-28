@@ -147,26 +147,25 @@
 
 (defn init-component [this]
   (let [[t f xs] (get @this :args)
-        render (renderer)
+        render (comp (renderer) t)
         view (apply f xs)
         form-2? (fn? view)
+        f (if form-2? view f)
         xs (rx/cell xs)
-        rx-view (rx/rx* (if form-2?
-                          #(t (apply view @xs))
-                          #(t (apply f @xs)))
-                        nil
-                        {:render render})]
-    (swap! this assoc :render render :view rx-view :xs xs)
-    (add-watch rx-view :render render-component)
-    (render (if form-2? @rx-view (t view)))))
+        view (rx/rx* #(apply f @xs)
+                     #(reset! xs %)
+                     {:render render})]
+    (swap! this assoc :render render :view view)
+    (add-watch view :render render-component)
+    (render @view)))
 
 (defn update-component [this prev node]
   (let [[t0 f0 xs0] (:args @prev)
         [t1 f1 xs1] (:args @this)]
     (if (and (= t0 t1) (= f0 f1))
-      (let [{:keys [render view xs]} @prev]
-        (swap! this assoc :render render :view view :xs xs)
-        (reset! xs xs1)
+      (let [{:keys [render view]} @prev]
+        (swap! this assoc :render render :view view)
+        (reset! view xs1)
         nil                                                 ; nil-return is important to keep previous node
         )
       (do
@@ -176,7 +175,7 @@
 (defn destroy-component [this node]
   (let [{:keys [render view]} @this]
     (remove-watch view :render)
-    (render empty-node)))
+    (request-render [render nil])))
 
 (defn component [t f xs key]
   (doto
