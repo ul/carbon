@@ -30,13 +30,28 @@
       (aset y (name k) (if (map? v) (map->js v) v)))
     y))
 
+(def attr-aliases {:class :className})
+
+(defn dealias [map kmap]
+  (reduce-kv
+    (fn [m old new]
+      (if-some [old (get map old)]
+        (assoc m new
+                 (if-some [new (get map new)]
+                   (cond
+                     (string? new) (str new " " old)
+                     :else (into new old))
+                   old))
+        m))
+    (apply dissoc map (keys kmap)) kmap))
+
 (defn node [f tag attrs children]
   {:pre  [(is (#{svg html} f))
           (is (or (keyword? tag) (string? tag)))
           (is (map? attrs))
           (is (coll? children))]
    :post [(is (instance? js/VDOM.VNode %))]}
-  (f (name tag) (map->js attrs) (apply array children)))
+  (f (name tag) (map->js (dealias attrs attr-aliases)) (apply array children)))
 
 (declare svg-tree component)
 
