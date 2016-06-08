@@ -13,3 +13,6 @@
 
 (defmacro dosync [& body]
   `(carbon.rx/dosync* (fn [] ~@body)))
+
+(defmacro no-rx [& body]
+  `(binding [carbon.rx/*rx* nil] ~@body))

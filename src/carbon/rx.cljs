@@ -56,10 +56,13 @@
         result (binding [*dirty-sinks* sinks
                          *dirty-sources* sources]
                  (f))]
-    (binding [*dirty-sources* sources]
-      (vswap! *dirty-sources* into (propagate @sinks)))
+    ;; top-level dosync*
+    (when-not *dirty-sinks*
+      (binding [*dirty-sources* sources]
+        (vswap! *dirty-sources* into (propagate @sinks))))
+    ;; top-level dosync*
     (when-not *dirty-sources*
-      (clean @sources))
+      (clean (reverse @sources)))
     result))
 
 (deftype ReactiveExpression [getter setter meta validator drop
