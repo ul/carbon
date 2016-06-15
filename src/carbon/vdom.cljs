@@ -150,10 +150,8 @@
         form-2? (fn? view)
         f (if form-2? view f)
         xs (rx/cell xs)
-        component (rx/lens (render (apply f @xs))
-                           #(reset! xs %)
-                           nil nil
-                           #(render nil))]
+        component (rx/lens (render (apply f @xs)) #(reset! xs %))]
+    (rx/add-drop component :unrender #(render nil))
     (swap! this assoc :component component)
     (add-watch component :render noop)
     @component))
