@@ -6,6 +6,6 @@
 
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.9.36"]
-                 [carbon/rx "0.1.4"]]
+                 [carbon/rx "0.1.8"]]
 
   :source-paths ["src"])
