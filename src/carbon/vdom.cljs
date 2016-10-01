@@ -45,9 +45,12 @@
         m))
     (apply dissoc map (keys kmap)) kmap))
 
+(defn valid-tag? [tag]
+  (or (keyword? tag) (string? tag)))
+
 (defn node [f tag attrs children]
   {:pre  [(is (#{svg html} f))
-          (is (or (keyword? tag) (string? tag)))
+          (is (valid-tag? tag))
           (is (map? attrs))
           (is (coll? children))]
    :post [(is (instance? js/VDOM.VNode %))]}
@@ -74,12 +77,12 @@
   (cond
     (vector? arg)
     (let [tag (get arg 0)]
-      (if (fn? tag)
-        (component html-tree tag (subvec arg 1) (-> arg meta :key))
+      (if (valid-tag? tag)
         (let [[tag attrs children] (parse-arg arg)]
           (if (= :svg tag)
             (node svg tag attrs (map svg-tree (flatten-children children)))
-            (node html tag attrs (map html-tree (flatten-children children)))))))
+            (node html tag attrs (map html-tree (flatten-children children)))))
+        (component html-tree tag (subvec arg 1) (-> arg meta :key))))
 
     (seq? arg)
     (node html :div {} (map html-tree (flatten-children arg)))
@@ -91,11 +94,11 @@
   (cond
     (vector? arg)
     (let [tag (get arg 0)]
-      (if (fn? tag)
-        (component svg-tree tag (subvec arg 1) (-> arg meta :key))
+      (if (valid-tag? tag)
         (let [[tag attrs children] (parse-arg arg)]
           (node svg tag attrs
-                (map (if (= :foreignObject tag) html-tree svg-tree) (flatten-children children))))))
+                (map (if (= :foreignObject tag) html-tree svg-tree) (flatten-children children))))
+        (component svg-tree tag (subvec arg 1) (-> arg meta :key))))
 
     (seq? arg)
     (node svg :g {} (map svg-tree (flatten-children arg)))
