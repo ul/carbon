@@ -16,16 +16,16 @@
 
 (defn- transit [state spec ctx event]
   (reduce
-    (fn [state [condition next-state]]
-      (if (condition ctx event)
-        (reduced
-          (do
-            (exit state spec ctx event)
-            (enter next-state spec ctx event)
-            (transit next-state spec ctx event)))
-        state))
-    state
-    (get-in spec [state :transitions])))
+   (fn [state [condition next-state]]
+     (if (condition ctx event)
+       (reduced
+        (do
+          (exit state spec ctx event)
+          (enter next-state spec ctx event)
+          (transit next-state spec ctx event)))
+       state))
+   state
+   (get-in spec [state :transitions])))
 
 (defn execute [state spec ctx event]
   (input state spec ctx event)
@@ -33,7 +33,7 @@
 
 (defn execute! [state spec ctx event]
   (rx/dosync
-    (swap! state execute spec ctx event)))
+   (swap! state execute spec ctx event)))
 
 (defn on
   "Returns a function which detects if the first element of its second argument is in `xs` set.

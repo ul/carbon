@@ -1,17 +1,45 @@
 (ns carbon.vdom
-  (:require js.vdom
-            clojure.data
+  (:require [cljsjs.inferno]
+            [cljsjs.inferno.hyperscript]
+            [cljsjs.inferno.create-class]
+            [goog.object :as obj]
+            [cuerdas.core :as str]
             [carbon.rx :as rx :include-macros true]
-            [carbon.vdom.hook :refer [hook]]
-            [carbon.vdom.widget :refer [widget]]
             [cljs.test :refer-macros [is]]))
 
-(def diff js/VDOM.diff)
-(def patch js/VDOM.patch)
-(def create js/VDOM.create)
-(def html js/VDOM.h)
-(def svg js/VDOM.svg)
-(def delegator (js/VDOM.Delegator.))
+(def ^:dynamic *path* [])
+
+(def id-gen (volatile! 0))
+
+(defn next-id []
+  (vswap! id-gen inc))
+
+(def functional-meta
+  [:on-component-will-mount
+   :on-component-did-mount ; domNode
+   :on-component-should-update ; lastProps, nextProps
+   :on-component-will-update ; lastProps, nextProps
+   :on-component-did-update ; lastProps, nextProps
+   :on-component-will-unmount
+   :key])
+
+(def component-lifecycle
+  [:component-will-mount
+   :component-did-mount
+   :component-should-update
+   :component-will-receive-props
+   :component-will-update
+   :component-did-update
+   :component-will-unmount
+   :component-did-unmount])
+
+(def component-meta (conj component-lifecycle :key))
+
+(defn map-keys [f m]
+  (persistent! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (transient {}) m)))
+
+(defn deref-if-rx [x]
+  (if (satisfies? rx/IReactiveSource x) @x x))
 
 (defn flatten-children [children]
   (->> children
@@ -19,92 +47,134 @@
        (remove seq?)
        (remove nil?)))
 
-(defn text-node [s]
-  (js/VDOM.VText. (str s)))
-
-(def empty-node (text-node nil))
-
 (defn map->js [x]
   (let [y (js-obj)]
-    (doseq [[k v] x :when (some? v)]
+    (doseq [[k v] x :when (some? v) :let [v (deref-if-rx v)]]
       (aset y (name k) (if (map? v) (map->js v) v)))
     y))
 
 (def attr-aliases {:class :className})
 
-(defn dealias [map kmap]
+(defn dealias [kmap map]
   (reduce-kv
-    (fn [m old new]
-      (if-some [old (get map old)]
-        (assoc m new
-                 (if-some [new (get map new)]
-                   (cond
-                     (string? new) (str new " " old)
-                     :else (into new old))
-                   old))
-        m))
-    (apply dissoc map (keys kmap)) kmap))
+   (fn [m old new]
+     (if-some [old (get map old)]
+       (assoc m new
+              (if-some [new (get map new)]
+                (cond
+                  (string? new) (str new " " old)
+                  :else (into new old))
+                old))
+       m))
+   (apply dissoc map (keys kmap)) kmap))
 
 (defn valid-tag? [tag]
   (or (keyword? tag) (string? tag)))
 
-(defn node [f tag attrs children]
-  {:pre  [(is (#{svg html} f))
-          (is (valid-tag? tag))
+(defn node [tag attrs children]
+  {:pre  [(is (valid-tag? tag))
           (is (map? attrs))
-          (is (coll? children))]
-   :post [(is (instance? js/VDOM.VNode %))]}
-  (f (name tag) (map->js (dealias attrs attr-aliases)) (apply array children)))
+          (is (coll? children))]}
+  (js/Inferno.h
+   (name tag)
+   (->> attrs
+        (dealias attr-aliases)
+        (map-keys str/camel)
+        map->js)
+   (apply array children)))
 
-(declare svg-tree component)
-
-(defn remove-children [elem]
-  (loop []
-    (when-let [c (.-firstChild elem)]
-      (.removeChild elem c)
-      (recur))))
-
-(defn parse-arg [[tag & [attrs & children :as args] :as form]]
+(defn parse-arg [[tag & [attrs & children :as args]]]
   (let [full? (map? attrs)]
     [tag
-     (let [attrs (if full? attrs {})]
-       (if-let [key (-> form meta :key)]
-         (assoc attrs :key key)
-         attrs))
+     (if full? attrs {})
      (if full? children args)]))
 
-(defn html-tree [arg]
+(declare component request-render)
+
+(defn process [arg]
   (cond
     (vector? arg)
     (let [tag (get arg 0)]
       (if (valid-tag? tag)
         (let [[tag attrs children] (parse-arg arg)]
-          (if (= :svg tag)
-            (node svg tag attrs (map svg-tree (flatten-children children)))
-            (node html tag attrs (map html-tree (flatten-children children)))))
-        (component html-tree tag (subvec arg 1) (-> arg meta :key))))
+          (->> children flatten-children (map process) (node tag attrs)))
+        (component tag (subvec arg 1) (meta arg))))
 
     (seq? arg)
-    (node html :div {} (map html-tree (flatten-children arg)))
+    (->> arg flatten-children (map process) (node :div {}))
 
     :else
-    (text-node arg)))
+    (str arg)))
 
-(defn svg-tree [arg]
-  (cond
-    (vector? arg)
-    (let [tag (get arg 0)]
-      (if (valid-tag? tag)
-        (let [[tag attrs children] (parse-arg arg)]
-          (node svg tag attrs
-                (map (if (= :foreignObject tag) html-tree svg-tree) (flatten-children children))))
-        (component svg-tree tag (subvec arg 1) (-> arg meta :key))))
+(defn call-some
+  ([this k]
+   (when-let [f (get (obj/getValueByKeys this "props" "meta") k)]
+     (f this)))
+  ([this k args]
+   (when-let [f (get (obj/getValueByKeys this "props" "meta") k)]
+     (apply f this args))))
 
-    (seq? arg)
-    (node svg :g {} (map svg-tree (flatten-children arg)))
+(defn lifecycle [k]
+  (fn [& args] (this-as this (call-some this k args))))
 
-    :else
-    (text-node arg)))
+(def wrapper
+  (js/Inferno.createClass
+   #js {:displayName
+        "CarbonWrapper"
+
+        :componentWillMount
+        (fn []
+          (this-as this
+                   (call-some this :component-will-mount)
+                   (add-watch (obj/getValueByKeys this "props" "component")
+                              ::render
+                              #(request-render
+                                (obj/getValueByKeys this "props" "path")
+                                this))))
+
+        :componentDidMount
+        (lifecycle :component-did-mount)
+
+        :componentShouldUpdate
+        (lifecycle :component-should-update)
+
+        :componentWillReceiveProps
+        (lifecycle :component-will-receive-props)
+
+        :componentWillUpdate
+        (lifecycle :component-will-update)
+
+        :componentDidUpdate
+        (lifecycle :component-did-update)
+
+        :componentWillUnmount
+        #(this-as this
+                  (remove-watch (obj/getValueByKeys this "props" "component") ::render)
+                  (call-some this :component-will-unmount))
+
+        :componentDidUnmount
+        (lifecycle :component-did-unmount)
+
+        :render
+        #(this-as this
+                  (rx/no-rx
+                   (binding [*path* (obj/getValueByKeys this "props" "path")]
+                     (process @(obj/getValueByKeys this "props" "component")))))}))
+
+(defn component* [f args]
+  (let [view (rx/no-rx (apply f args))
+        f (if (fn? view) view f)]
+    (rx/rx (apply f args))))
+
+(defn component [f args meta]
+  (js/Inferno.h wrapper
+                #js {:component (component* f args)
+                     :key (get meta :key)
+                     :meta meta
+                     :path (conj *path* (next-id))}))
+
+(defn mount [view elem]
+  (js/Inferno.render (process view) elem))
 
 ;;; Render batching
 
@@ -120,74 +190,32 @@
 (def empty-queue {})
 (def render-queue (volatile! empty-queue))
 
+(defn flatten-queue [m]
+  (->> m
+       (tree-seq map? vals)
+       (remove map?)))
+
 (defn render []
   (let [queue @render-queue]
     (vreset! render-queue empty-queue)
-    (doseq [[render view] queue]
-      (render view))))
+    (doseq [c (flatten-queue queue)]
+      (.forceUpdate c))))
 
-(defn request-render [[f x]]
-  (when (empty? @render-queue)
-    (schedule render))
-  (vswap! render-queue assoc f x))
+(defn get-if-map [m k]
+  (if (map? m)
+    (get m k)
+    (reduced m)))
 
-(defn renderer []
-  (let [tree (volatile! empty-node)
-        root (volatile! (create @tree))]
-    (fn [new-tree]
-      (let [patches (diff @tree new-tree)]
-        (vreset! tree new-tree)
-        (vswap! root patch patches)))))
+(defn get-in* [m path]
+  (reduce get-if-map m path))
 
-;;; Components
+(defn assoc-in* [m path x]
+  (let [y (get-in* m path)]
+    (if (or (nil? y) (map? y))
+      (assoc-in m path x)
+      m)))
 
-(defn render-component [_ _ _ component]
-  (request-render component))
-
-(def noop (constantly nil))
-
-(defn init-component [this]
-  (let [[t f xs] (get @this :args)
-        render (comp (renderer) t)
-        view (apply f xs)
-        form-2? (fn? view)
-        f (if form-2? view f)
-        xs (rx/cell xs)
-        component (rx/lens (render (apply f @xs)) #(reset! xs %))]
-    (rx/add-drop component :unrender #(render nil))
-    (swap! this assoc :component component)
-    (add-watch component :render noop)
-    @component))
-
-(defn update-component [this prev node]
-  (let [[t0 f0 xs0] (:args @prev)
-        [t1 f1 xs1] (:args @this)]
-    (if (and (= t0 t1) (= f0 f1))
-      (let [{:keys [component]} @prev]
-        (swap! this assoc :component component)
-        (reset! component xs1)
-        nil                                                 ; nil-return is important to keep previous node
-        )
-      (do
-        (.destroy prev)
-        (.init this)))))
-
-(defn destroy-component [this node]
-  (remove-watch (get @this :component) :render))
-
-(defn component [t f xs key]
-  (doto
-    (widget init-component update-component destroy-component {:args [t f xs]})
-    (aset "key" key)))
-
-(defn unmount [elem]
-  (when-let [r (aget elem "__carbon_renderer")]
-    (r empty-node))
-  (aset elem "__carbon_renderer" nil))
-
-(defn mount [elem view]
-  (rx/dosync
-    (unmount elem)
-    (let [r (renderer)]
-      (aset elem "__carbon_renderer" r)
-      (.appendChild elem (r (html-tree view))))))
+(defn request-render [path c]
+  (vswap! render-queue assoc-in* path c)
+  (when-not (empty? @render-queue)
+    (schedule render)))

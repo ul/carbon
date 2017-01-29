@@ -11,8 +11,3 @@ pom.xml
 .lein-plugins/
 .repl
 .nrepl-port
-/.idea
-/node_modules
-/*-init.clj
-/*.iml
-.lein-failures

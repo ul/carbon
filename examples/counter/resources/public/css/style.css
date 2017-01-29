@@ -1,0 +1,11 @@
+/* some style */
+button {
+  width: 6em;
+}
+
+.counter {
+  margin: 1em;
+  width: 2em;
+  text-align: center;
+  display: inline-block;
+}
