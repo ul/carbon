@@ -195,12 +195,6 @@
        (tree-seq map? vals)
        (remove map?)))
 
-(defn render []
-  (let [queue @render-queue]
-    (vreset! render-queue empty-queue)
-    (doseq [c (flatten-queue queue)]
-      (.forceUpdate c))))
-
 (defn get-if-map [m k]
   (if (map? m)
     (get m k)
@@ -215,7 +209,30 @@
       (assoc-in m path x)
       m)))
 
+(defn put-into-queue [m [path :as x]]
+  (assoc-in* m path x))
+
+(defn put-into-queue! [x]
+  (vswap! render-queue put-into-queue x))
+
+(defn put-all-into-queue! [xs]
+  (vswap! render-queue reduce put-into-queue xs))
+
+(defn render []
+  (let [t (system-time)
+        queue (flatten-queue @render-queue)]
+    (vreset! render-queue empty-queue)
+    (loop [queue queue]
+      (when-let [[path c] (first queue)]
+        (if (< (- (system-time) t) 16)
+          (do
+            (.forceUpdate c)
+            (recur (rest queue)))
+          (do
+            (put-all-into-queue! queue)
+            (schedule render)))))))
+
 (defn request-render [path c]
-  (vswap! render-queue assoc-in* path c)
-  (when-not (empty? @render-queue)
-    (schedule render)))
+  (when (empty? @render-queue)
+    (schedule render))
+  (put-into-queue! [path c]))
