@@ -38,20 +38,14 @@
 (defn map-keys [f m]
   (persistent! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (transient {}) m)))
 
-(defn deref-if-rx [x]
-  (if (satisfies? rx/IReactiveSource x) @x x))
+(defn filter-vals [p m]
+  (reduce-kv (fn [m k v] (if (p v) m (dissoc m k))) m m))
 
 (defn flatten-children [children]
   (->> children
        (tree-seq seq? seq)
        (remove seq?)
        (remove nil?)))
-
-(defn map->js [x]
-  (let [y (js-obj)]
-    (doseq [[k v] x :when (some? v) :let [v (deref-if-rx v)]]
-      (aset y (name k) (if (map? v) (map->js v) v)))
-    y))
 
 (def attr-aliases {:class :className})
 
@@ -78,9 +72,10 @@
   (js/Inferno.h
    (name tag)
    (->> attrs
+        (filter-vals some?)
         (dealias attr-aliases)
         (map-keys str/camel)
-        map->js)
+        clj->js)
    (apply array children)))
 
 (defn parse-arg [[tag & [attrs & children :as args]]]
@@ -106,12 +101,18 @@
     :else
     (str arg)))
 
+(defn get-prop [this k]
+  (obj/getValueByKeys this "props" (name k)))
+
+(defn get-state [this k]
+  (obj/getValueByKeys this "state" (name k)))
+
 (defn call-some
   ([this k]
-   (when-let [f (get (obj/getValueByKeys this "props" "meta") k)]
+   (when-let [f (get (get-prop this "meta") k)]
      (f this)))
   ([this k args]
-   (when-let [f (get (obj/getValueByKeys this "props" "meta") k)]
+   (when-let [f (get (get-prop this "meta") k)]
      (apply f this args))))
 
 (defn lifecycle [k]
@@ -126,20 +127,44 @@
         (fn []
           (this-as this
                    (call-some this :component-will-mount)
-                   (add-watch (obj/getValueByKeys this "props" "component")
-                              ::render
-                              #(request-render
-                                (obj/getValueByKeys this "props" "path")
-                                this))))
+                   (let [f (get-prop this :f)
+                         args (get-prop this :args)
+                         path (conj (get-prop this :parent-path) (next-id))
+                         form (rx/no-rx (apply f args))
+                         form-2? (fn? form)
+                         view (if form-2? form f)
+                         view (rx/cell view)
+                         args (rx/cell args)
+                         component (rx/rx (apply @view @args))]
+                     (.setState this #js {:component component
+                                          :path path
+                                          :f f
+                                          :view view
+                                          :args args})
+                     (add-watch component ::render #(request-render path this)))))
 
         :componentDidMount
         (lifecycle :component-did-mount)
 
         :componentShouldUpdate
-        (lifecycle :component-should-update)
+        (constantly false)
 
         :componentWillReceiveProps
-        (lifecycle :component-will-receive-props)
+        (fn [next-props]
+          (this-as this
+            (let [next-f (obj/get next-props "f")
+                  next-args (obj/get next-props "args")
+                  f (get-state this :f)
+                  args (get-state this :args)
+                  view (get-state this :view)]
+              (if (= f next-f)
+                (reset! args next-args)
+                (let [form (rx/no-rx (apply next-f next-args))
+                      form-2? (fn? form)
+                      next-view (if form-2? form next-f)]
+                  (rx/dosync
+                   (reset! args next-args)
+                   (reset! view next-view)))))))
 
         :componentWillUpdate
         (lifecycle :component-will-update)
@@ -149,7 +174,7 @@
 
         :componentWillUnmount
         #(this-as this
-                  (remove-watch (obj/getValueByKeys this "props" "component") ::render)
+                  (remove-watch (get-state this :component) ::render)
                   (call-some this :component-will-unmount))
 
         :componentDidUnmount
@@ -158,20 +183,16 @@
         :render
         #(this-as this
                   (rx/no-rx
-                   (binding [*path* (obj/getValueByKeys this "props" "path")]
-                     (process @(obj/getValueByKeys this "props" "component")))))}))
-
-(defn component* [f args]
-  (let [view (rx/no-rx (apply f args))
-        f (if (fn? view) view f)]
-    (rx/rx (apply f args))))
+                   (binding [*path* (get-state this :path)]
+                     (process @(get-state this :component)))))}))
 
 (defn component [f args meta]
   (js/Inferno.h wrapper
-                #js {:component (component* f args)
+                #js {:f f
+                     :args args
                      :key (get meta :key)
                      :meta meta
-                     :path (conj *path* (next-id))}))
+                     :parent-path *path*}))
 
 (defn mount [view elem]
   (js/Inferno.render (process view) elem))
