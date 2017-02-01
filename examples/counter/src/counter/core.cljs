@@ -7,18 +7,25 @@
 ;; define your app data so that it doesn't get over-written on reload
 
 (defonce app-state (rx/cell [0 0]))
+(def cs [(rx/cursor app-state [0]) (rx/cursor app-state [1])])
 
-(defn counter [i]
+(defn counter [c]
   [:div
-   [:button.pure-button {:on-click #(swap! app-state update i inc)} "Inc"]
-   [:.counter (get @app-state i)]
-   [:button.pure-button {:on-click #(swap! app-state update i dec)} "Dec"]])
+   [:button.pure-button {:onclick #(swap! c inc)} "Inc"]
+   [:.counter @c]
+   [:button.pure-button {:onclick #(swap! c dec)} "Dec"]])
+
+(defn ppp []
+  [:div (pr-str @app-state)
+   (for [i (-> @app-state count range)]
+     ^{:key i} [counter (get cs i)])])
 
 (defn app []
-  (for [i (-> @app-state count range)]
-    ^{:key i} [counter i]))
+  [:div
+   [ppp]
+   ])
 
-(vdom/mount [app] (js/document.getElementById "app"))
+(vdom/mount (js/document.getElementById "app") [app])
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

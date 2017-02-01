@@ -8,12 +8,15 @@
 
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.9.456"]
-                 [carbon "0.3.0-SNAPSHOT"]]
+                 [cljsjs/incremental-dom "0.5.2-0"]
+                 [funcool/cuerdas "2.0.2"]
+                 [carbon/rx "0.3.0-SNAPSHOT"]]
+                 ;; [carbon "0.3.0-SNAPSHOT"]]
 
   :plugins [[lein-figwheel "0.5.8"]
             [lein-cljsbuild "1.1.5" :exclusions [[org.clojure/clojure]]]]
 
-  :source-paths ["src"]
+  :source-paths ["src" "../../src"]
 
   :clean-targets ^{:protect false} ["resources/public/js/compiled" "target"]
 
