@@ -84,7 +84,7 @@
      (if full? attrs {})
      (if full? children args)]))
 
-(declare component request-render)
+(declare component request-render clear-render)
 
 (defn process [arg]
   (cond
@@ -208,52 +208,25 @@
                js/window.oRequestAnimationFrame))
       #(js/setTimeout % 16)))
 
-(def empty-queue {})
+(def empty-queue (sorted-map))
 (def render-queue (volatile! empty-queue))
 
-(defn flatten-queue [m]
-  (->> m
-       (tree-seq map? vals)
-       (remove map?)))
-
-(defn get-if-map [m k]
-  (if (map? m)
-    (get m k)
-    (reduced m)))
-
-(defn get-in* [m path]
-  (reduce get-if-map m path))
-
-(defn assoc-in* [m path x]
-  (let [y (get-in* m path)]
-    (if (or (nil? y) (map? y))
-      (assoc-in m path x)
-      m)))
-
-(defn put-into-queue [m [path :as x]]
-  (assoc-in* m path x))
-
-(defn put-into-queue! [x]
-  (vswap! render-queue put-into-queue x))
-
-(defn put-all-into-queue! [xs]
-  (vswap! render-queue reduce put-into-queue xs))
-
 (defn render []
-  (let [t (system-time)
-        queue (flatten-queue @render-queue)]
-    (vreset! render-queue empty-queue)
-    (loop [queue queue]
-      (when-let [[path c] (first queue)]
+  (let [t (system-time)]
+    (loop []
+      (when-let [[path c] (first @render-queue)]
         (if (< (- (system-time) t) 16)
           (do
             (.forceUpdate c)
-            (recur (rest queue)))
-          (do
-            (put-all-into-queue! queue)
+            (clear-render path)
+            (recur))
+          (when-not (empty? @render-queue)
             (schedule render)))))))
 
 (defn request-render [path c]
   (when (empty? @render-queue)
     (schedule render))
-  (put-into-queue! [path c]))
+  (vswap! render-queue assoc path c))
+
+(defn clear-render [path]
+  (vswap! render-queue dissoc path))
