@@ -3,9 +3,17 @@
             [cljsjs.inferno.hyperscript]
             [cljsjs.inferno.create-class]
             [goog.object :as obj]
-            [cuerdas.core :as str]
+            [clojure.string :as str]
             [carbon.rx :as rx :include-macros true]
             [cljs.test :refer-macros [is]]))
+
+(def kebab-start #"-(\w)")
+
+(defn upper-case-second [x]
+  (-> x second str/upper-case))
+
+(defn camel [s]
+  (-> s name (str/replace kebab-start upper-case-second)))
 
 (def ^:dynamic *path* [])
 
@@ -74,7 +82,7 @@
    (->> attrs
         (filter-vals some?)
         (dealias attr-aliases)
-        (map-keys str/camel)
+        (map-keys camel)
         clj->js)
    (apply array children)))
 
