@@ -55,21 +55,6 @@
        (remove seq?)
        (remove nil?)))
 
-(def attr-aliases {:class :className})
-
-(defn dealias [kmap map]
-  (reduce-kv
-   (fn [m old new]
-     (if-some [old (get map old)]
-       (assoc m new
-              (if-some [new (get map new)]
-                (cond
-                  (string? new) (str new " " old)
-                  :else (into new old))
-                old))
-       m))
-   (apply dissoc map (keys kmap)) kmap))
-
 (defn valid-tag? [tag]
   (or (keyword? tag) (string? tag)))
 
@@ -81,7 +66,6 @@
    (name tag)
    (->> attrs
         (filter-vals some?)
-        (dealias attr-aliases)
         (map-keys camel)
         clj->js)
    (apply array children)))
