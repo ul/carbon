@@ -29,7 +29,8 @@
    :on-component-will-update ; lastProps, nextProps
    :on-component-did-update ; lastProps, nextProps
    :on-component-will-unmount
-   :key])
+   :key
+   :ref])
 
 (def component-lifecycle
   [:component-will-mount
@@ -41,7 +42,7 @@
    :component-will-unmount
    :component-did-unmount])
 
-(def component-meta (conj component-lifecycle :key))
+(def component-meta (conj component-lifecycle :key :ref))
 
 (defn map-keys [f m]
   (persistent! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (transient {}) m)))
@@ -183,6 +184,7 @@
                 #js {:f f
                      :args args
                      :key (get meta :key)
+                     :ref (get meta :ref)
                      :meta meta
                      :parent-path *path*}))
 
