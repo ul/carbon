@@ -3,17 +3,17 @@
             [cljsjs.inferno.hyperscript]
             [cljsjs.inferno.create-class]
             [goog.object :as obj]
-            [clojure.string :as str]
             [carbon.rx :as rx :include-macros true]
-            [cljs.test :refer-macros [is]]))
+            [cljs.test :refer-macros [is]]
+            [clojure.string :as str]))
 
-(def kebab-start #"-(\w)")
+(def kebab-start (js/RegExp. "-(\\w)" "g"))
 
 (defn upper-case-second [x]
-  (-> x second str/upper-case))
+  (-> x (aget 1) str/upper-case))
 
 (defn camel [s]
-  (-> s name (str/replace kebab-start upper-case-second)))
+  (-> s name (.replace kebab-start upper-case-second)))
 
 (def ^:dynamic *path* [])
 
@@ -207,7 +207,11 @@
 (def render-queue (volatile! empty-queue))
 
 (defn render []
-  (let [t (system-time)]
+  (let [queue @render-queue]
+    (vreset! render-queue empty-queue)
+    (doseq [c (vals queue)]
+      (.forceUpdate c)))
+  #_(let [t (system-time)]
     (loop []
       (when-let [[path c] (first @render-queue)]
         (if (< (- (system-time) t) 16)
