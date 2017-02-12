@@ -123,12 +123,12 @@
                    (let [f (get-prop this :f)
                          args (get-prop this :args)
                          path (conj (get-prop this :parent-path) (next-id))
-                         form (rx/no-rx (apply f args))
-                         form-2? (fn? form)
-                         view (if form-2? form f)
-                         view (rx/cell view)
+                         view (rx/cell f)
                          args (rx/cell args)
-                         component (rx/rx (apply @view @args))]
+                         component (rx/rx (apply @view @args))
+                         form @component]
+                     (when (fn? form)
+                       (reset! view form))
                      (.setState this #js {:component component
                                           :path path
                                           :f f
@@ -148,16 +148,17 @@
             (let [next-f (obj/get next-props "f")
                   next-args (obj/get next-props "args")
                   f (get-state this :f)
-                  args (get-state this :args)
-                  view (get-state this :view)]
+                  args (get-state this :args)]
               (if (= f next-f)
                 (reset! args next-args)
-                (let [form (rx/no-rx (apply next-f next-args))
-                      form-2? (fn? form)
-                      next-view (if form-2? form next-f)]
+                (let [view (get-state this :view)
+                      component (get-state this :component)]
                   (rx/dosync
-                   (reset! args next-args)
-                   (reset! view next-view)))))))
+                   (reset! view next-f)
+                   (reset! args next-args))
+                  (let [form @component]
+                    (when (fn? form)
+                      (reset! view form))))))))
 
         :componentWillUpdate
         (lifecycle :component-will-update)
