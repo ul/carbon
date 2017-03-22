@@ -1,6 +1,7 @@
 (ns carbon.vdom
   (:require [cljsjs.inferno]
             [cljsjs.inferno.hyperscript]
+            [cljsjs.inferno.component]
             [cljsjs.inferno.create-class]
             [goog.object :as obj]
             [carbon.rx :as rx :include-macros true]
@@ -13,7 +14,13 @@
   (-> x (aget 1) str/upper-case))
 
 (defn camel [s]
-  (-> s name (.replace kebab-start upper-case-second)))
+  (-> s (.replace kebab-start upper-case-second)))
+
+(defn camel-event-handlers [s]
+  (let [s (name s)]
+    (if (.startsWith s "on-")
+      (camel s)
+      s)))
 
 (def ^:dynamic *path* [])
 
@@ -67,7 +74,7 @@
    (name tag)
    (->> attrs
         (filter-vals some?)
-        (map-keys camel)
+        (map-keys camel-event-handlers)
         clj->js)
    (apply array children)))
 
