@@ -4,9 +4,9 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :dependencies [[org.clojure/clojure "1.9.0-alpha14"]
+  :dependencies [[org.clojure/clojure "1.9.0-alpha15"]
                  [org.clojure/clojurescript "1.9.495"]
-                 [cljsjs/inferno "1.4.2-0"]
+                 [cljsjs/inferno "1.5.3-0"]
                  [carbon/rx "0.3.0-SNAPSHOT"]]
 
   :source-paths ["src"])
