@@ -66,6 +66,11 @@
 (defn valid-tag? [tag]
   (or (keyword? tag) (string? tag)))
 
+(defn dealias [{:keys [class] :as m}]
+  (if class
+    (assoc m :className class)
+    m))
+
 (defn node [tag attrs children]
   {:pre  [(is (valid-tag? tag))
           (is (map? attrs))
@@ -74,6 +79,7 @@
    (name tag)
    (->> attrs
         (filter-vals some?)
+        (dealias)
         (map-keys camel-event-handlers)
         clj->js)
    (apply array children)))
@@ -118,6 +124,7 @@
 (defn lifecycle [k]
   (fn [& args] (this-as this (call-some this k args))))
 
+;; FIXME using one class to rule all components abuses mount/unmount lifecycle events and probably ref
 (def wrapper
   (js/Inferno.createClass
    #js {:displayName
