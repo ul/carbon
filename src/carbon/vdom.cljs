@@ -124,18 +124,18 @@
 (defn lifecycle [k]
   (fn [& args] (this-as this (call-some this k args))))
 
-;; FIXME using one class to rule all components abuses mount/unmount lifecycle events and probably ref
-(def wrapper
+(def wrapper-cache (atom {}))
+
+(defn make-wrapper [f]
   (js/Inferno.createClass
    #js {:displayName
-        "CarbonWrapper"
+        (-> f meta (get :component/display-name) (or (.-name f) "CarbonWrapper"))
 
         :componentWillMount
         (fn []
           (this-as this
                    (call-some this :component-will-mount)
-                   (let [f (get-prop this :f)
-                         args (get-prop this :args)
+                   (let [args (get-prop this :args)
                          path (conj (get-prop this :parent-path) (next-id))
                          view (rx/cell f)
                          args (rx/cell args)
@@ -145,7 +145,6 @@
                        (reset! view form))
                      (.setState this #js {:component component
                                           :path path
-                                          :f f
                                           :view view
                                           :args args})
                      (add-watch component ::render #(request-render path this)))))
@@ -159,20 +158,10 @@
         :componentWillReceiveProps
         (fn [next-props]
           (this-as this
-            (let [next-f (obj/get next-props "f")
-                  next-args (obj/get next-props "args")
-                  f (get-state this :f)
+            (call-some this :component-will-receive-props)
+            (let [next-args (obj/get next-props "args")
                   args (get-state this :args)]
-              (if (= f next-f)
-                (reset! args next-args)
-                (let [view (get-state this :view)
-                      component (get-state this :component)]
-                  (rx/dosync
-                   (reset! view next-f)
-                   (reset! args next-args))
-                  (let [form @component]
-                    (when (fn? form)
-                      (reset! view form))))))))
+              (reset! args next-args))))
 
         :componentWillUpdate
         (lifecycle :component-will-update)
@@ -194,10 +183,16 @@
                    (binding [*path* (get-state this :path)]
                      (process @(get-state this :component)))))}))
 
+(defn get-wrapper [f]
+  (if-let [c (get @wrapper-cache f)]
+    c
+    (let [c (make-wrapper f)]
+      (swap! wrapper-cache assoc f c)
+      c)))
+
 (defn component [f args meta]
-  (js/Inferno.h wrapper
-                #js {:f f
-                     :args args
+  (js/Inferno.h (get-wrapper f)
+                #js {:args args
                      :key (get meta :key)
                      :ref (get meta :ref)
                      :meta meta
