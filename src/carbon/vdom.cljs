@@ -5,7 +5,6 @@
             [cljsjs.inferno.create-class]
             [goog.object :as obj]
             [carbon.rx :as rx :include-macros true]
-            [cljs.test :refer-macros [is]]
             [clojure.string :as str]))
 
 (def kebab-start (js/RegExp. "-(\\w)" "g"))
@@ -72,9 +71,6 @@
     m))
 
 (defn node [tag attrs children]
-  {:pre  [(is (valid-tag? tag))
-          (is (map? attrs))
-          (is (coll? children))]}
   (js/Inferno.h
    (name tag)
    (->> attrs
@@ -143,10 +139,11 @@
                          form @component]
                      (when (fn? form)
                        (reset! view form))
-                     (.setState this #js {:component component
-                                          :path path
-                                          :view view
-                                          :args args})
+                     ((obj/get this "setState")
+                      #js {:component component
+                           :path path
+                           :view view
+                           :args args})
                      (add-watch component ::render #(request-render path this)))))
 
         :componentDidMount
@@ -158,10 +155,10 @@
         :componentWillReceiveProps
         (fn [next-props]
           (this-as this
-            (call-some this :component-will-receive-props)
-            (let [next-args (obj/get next-props "args")
-                  args (get-state this :args)]
-              (reset! args next-args))))
+                   (call-some this :component-will-receive-props)
+                   (let [next-args (obj/get next-props "args")
+                         args (get-state this :args)]
+                     (reset! args next-args))))
 
         :componentWillUpdate
         (lifecycle :component-will-update)
@@ -219,17 +216,17 @@
   (let [queue @render-queue]
     (vreset! render-queue empty-queue)
     (doseq [c (vals queue)]
-      (.forceUpdate c)))
+      ((obj/get c "forceUpdate"))))
   #_(let [t (system-time)]
-    (loop []
-      (when-let [[path c] (first @render-queue)]
-        (if (< (- (system-time) t) 16)
-          (do
-            (.forceUpdate c)
-            (clear-render path)
-            (recur))
-          (when-not (empty? @render-queue)
-            (schedule render)))))))
+      (loop []
+        (when-let [[path c] (first @render-queue)]
+          (if (< (- (system-time) t) 16)
+            (do
+              (.forceUpdate c)
+              (clear-render path)
+              (recur))
+            (when-not (empty? @render-queue)
+              (schedule render)))))))
 
 (defn request-render [path c]
   (when (empty? @render-queue)
