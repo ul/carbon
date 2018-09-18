@@ -1,7 +1,6 @@
 (ns carbon.vdom
   (:require [cljsjs.inferno]
             [cljsjs.inferno.hyperscript]
-            [cljsjs.inferno.component]
             [cljsjs.inferno.create-class]
             [goog.object :as obj]
             [carbon.rx :as rx :include-macros true]
