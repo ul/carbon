@@ -1,0 +1,12 @@
+{:source-paths ["src" "examples/counter/src"]
+ :dependencies [[carbon/rx "0.4.0-SNAPSHOT"]]
+ :compiler-options
+ {:output-feature-set :es-next}
+ :builds
+ {:app
+  {:target :browser
+   :output-dir "examples/counter/resources/public/js/compiled/out"
+   :asset-path "js/compiled/out"
+   :modules {:main {:entries [counter.core]}}
+   :devtools {:http-root "examples/counter/resources/public"
+              :http-port 8080}}}}

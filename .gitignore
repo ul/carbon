@@ -16,3 +16,4 @@ pom.xml
 /*-init.clj
 /*.iml
 .lein-failures
+/.shadow-cljs/

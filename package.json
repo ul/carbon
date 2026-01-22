@@ -1,0 +1,32 @@
+{
+  "name": "carbon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Yet another ClojureScript VDOM FRP library.",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ul/carbon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ul/carbon/issues"
+  },
+  "homepage": "https://github.com/ul/carbon#readme",
+  "devDependencies": {
+    "shadow-cljs": "^3.3.5"
+  },
+  "dependencies": {
+    "inferno": "^9.0.10",
+    "inferno-create-class": "^8.2.3",
+    "inferno-hyperscript": "^9.0.10"
+  }
+}

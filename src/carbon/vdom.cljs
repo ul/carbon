@@ -1,7 +1,7 @@
 (ns carbon.vdom
-  (:require [cljsjs.inferno]
-            [cljsjs.inferno.hyperscript]
-            [cljsjs.inferno.create-class]
+  (:require ["inferno" :as inferno]
+            ["inferno-hyperscript" :refer [h]]
+            ["inferno-create-class" :refer [createClass]]
             [goog.object :as obj]
             [carbon.rx :as rx :include-macros true]
             [clojure.string :as str]))
@@ -70,7 +70,7 @@
     m))
 
 (defn node [tag attrs children]
-  (js/Inferno.h
+  (h
    (name tag)
    (->> attrs
         (filter-vals some?)
@@ -122,7 +122,7 @@
 (def wrapper-cache (atom {}))
 
 (defn make-wrapper [f]
-  (js/Inferno.createClass
+  (createClass
    #js {:displayName
         (-> f meta (get :component/display-name) (or (.-name f) "CarbonWrapper"))
 
@@ -187,7 +187,7 @@
       c)))
 
 (defn component [f args meta]
-  (js/Inferno.h (get-wrapper f)
+  (h (get-wrapper f)
                 #js {:args args
                      :key (get meta :key)
                      :ref (get meta :ref)
@@ -195,7 +195,7 @@
                      :parent-path *path*}))
 
 (defn mount [view elem]
-  (js/Inferno.render (process view) elem))
+  (inferno/render (process view) elem))
 
 ;;; Render batching
 
@@ -215,17 +215,7 @@
   (let [queue @render-queue]
     (vreset! render-queue empty-queue)
     (doseq [c (vals queue)]
-      ((obj/get c "forceUpdate"))))
-  #_(let [t (system-time)]
-      (loop []
-        (when-let [[path c] (first @render-queue)]
-          (if (< (- (system-time) t) 16)
-            (do
-              (.forceUpdate c)
-              (clear-render path)
-              (recur))
-            (when-not (empty? @render-queue)
-              (schedule render)))))))
+      ((obj/get c "forceUpdate")))))
 
 (defn request-render [path c]
   (when (empty? @render-queue)
