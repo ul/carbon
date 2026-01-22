@@ -1,4 +1,4 @@
-(defproject carbon "0.3.0-SNAPSHOT"
+(defproject carbon "0.4.0-SNAPSHOT"
   :description "Yet another VDOM FRP library"
   :url "https://github.com/ul/carbon"
   :license {:name "Eclipse Public License"
