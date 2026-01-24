@@ -28,20 +28,6 @@
 
 (defn next-id [] (vswap! id-gen inc))
 
-(def functional-meta
-  [:on-component-will-mount :on-component-did-mount ; domNode
-   :on-component-should-update ; lastProps, nextProps
-   :on-component-will-update ; lastProps, nextProps
-   :on-component-did-update ; lastProps, nextProps
-   :on-component-will-unmount :key :ref])
-
-(def component-lifecycle
-  [:component-will-mount :component-did-mount :component-should-update
-   :component-will-receive-props :component-will-update :component-did-update
-   :component-will-unmount :component-did-unmount])
-
-(def component-meta (conj component-lifecycle :key :ref))
-
 (defn map-keys
   [f m]
   (persistent! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (transient {}) m)))
