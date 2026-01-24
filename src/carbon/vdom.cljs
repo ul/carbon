@@ -7,215 +7,192 @@
 
 (def kebab-start (js/RegExp. "-(\\w)" "g"))
 
-(defn upper-case-second [x]
-  (-> x (aget 1) str/upper-case))
+(defn upper-case-second
+  [x]
+  (-> x
+      (aget 1)
+      str/upper-case))
 
-(defn camel [s]
-  (-> s (.replace kebab-start upper-case-second)))
+(defn camel
+  [s]
+  (-> s
+      (.replace kebab-start upper-case-second)))
 
-(defn camel-event-handlers [s]
-  (let [s (name s)]
-    (if (.startsWith s "on-")
-      (camel s)
-      s)))
+(defn camel-event-handlers
+  [s]
+  (let [s (name s)] (if (.startsWith s "on-") (camel s) s)))
 
 (def ^:dynamic *path* [])
 
 (def id-gen (volatile! 0))
 
-(defn next-id []
-  (vswap! id-gen inc))
+(defn next-id [] (vswap! id-gen inc))
 
 (def functional-meta
-  [:on-component-will-mount
-   :on-component-did-mount ; domNode
+  [:on-component-will-mount :on-component-did-mount ; domNode
    :on-component-should-update ; lastProps, nextProps
    :on-component-will-update ; lastProps, nextProps
    :on-component-did-update ; lastProps, nextProps
-   :on-component-will-unmount
-   :key
-   :ref])
+   :on-component-will-unmount :key :ref])
 
 (def component-lifecycle
-  [:component-will-mount
-   :component-did-mount
-   :component-should-update
-   :component-will-receive-props
-   :component-will-update
-   :component-did-update
-   :component-will-unmount
-   :component-did-unmount])
+  [:component-will-mount :component-did-mount :component-should-update
+   :component-will-receive-props :component-will-update :component-did-update
+   :component-will-unmount :component-did-unmount])
 
 (def component-meta (conj component-lifecycle :key :ref))
 
-(defn map-keys [f m]
+(defn map-keys
+  [f m]
   (persistent! (reduce-kv (fn [m k v] (assoc! m (f k) v)) (transient {}) m)))
 
-(defn filter-vals [p m]
-  (reduce-kv (fn [m k v] (if (p v) m (dissoc m k))) m m))
+(defn filter-vals [p m] (reduce-kv (fn [m k v] (if (p v) m (dissoc m k))) m m))
 
-(defn flatten-children [children]
+(defn flatten-children
+  [children]
   (->> children
        (tree-seq seq? seq)
        (remove seq?)
        (remove nil?)))
 
-(defn valid-tag? [tag]
-  (or (keyword? tag) (string? tag)))
+(defn valid-tag? [tag] (or (keyword? tag) (string? tag)))
 
-(defn dealias [{:keys [class] :as m}]
-  (if class
-    (assoc m :className class)
-    m))
+(defn dealias [{:keys [class], :as m}] (if class (assoc m :className class) m))
 
-(defn node [tag attrs children]
-  (h
-   (name tag)
-   (->> attrs
-        (filter-vals some?)
-        (dealias)
-        (map-keys camel-event-handlers)
-        clj->js)
-   (apply array children)))
+(defn node
+  [tag attrs children]
+  (h (name tag)
+     (->> attrs
+          (filter-vals some?)
+          (dealias)
+          (map-keys camel-event-handlers)
+          clj->js)
+     (apply array children)))
 
-(defn parse-arg [[tag & [attrs & children :as args]]]
-  (let [full? (map? attrs)]
-    [tag
-     (if full? attrs {})
-     (if full? children args)]))
+(defn parse-arg
+  [[tag & [attrs & children :as args]]]
+  (let [full? (map? attrs)] [tag (if full? attrs {}) (if full? children args)]))
 
 (declare component request-render clear-render)
 
-(defn process [arg]
-  (cond
-    (vector? arg)
-    (let [tag (get arg 0)]
-      (if (valid-tag? tag)
-        (let [[tag attrs children] (parse-arg arg)]
-          (->> children flatten-children (map process) (node tag attrs)))
-        (component tag (subvec arg 1) (meta arg))))
+(defn process
+  [arg]
+  (cond (vector? arg) (let [tag (get arg 0)]
+                        (if (valid-tag? tag)
+                          (let [[tag attrs children] (parse-arg arg)]
+                            (->> children
+                                 flatten-children
+                                 (map process)
+                                 (node tag attrs)))
+                          (component tag (subvec arg 1) (meta arg))))
+        (seq? arg) (->> arg
+                        flatten-children
+                        (map process)
+                        (node :div {}))
+        :else (str arg)))
 
-    (seq? arg)
-    (->> arg flatten-children (map process) (node :div {}))
+(defn get-prop [this k] (obj/getValueByKeys this "props" (name k)))
 
-    :else
-    (str arg)))
-
-(defn get-prop [this k]
-  (obj/getValueByKeys this "props" (name k)))
-
-(defn get-state [this k]
-  (obj/getValueByKeys this "state" (name k)))
+(defn get-state [this k] (obj/getValueByKeys this "state" (name k)))
 
 (defn call-some
-  ([this k]
-   (when-let [f (get (get-prop this "meta") k)]
-     (f this)))
+  ([this k] (when-let [f (get (get-prop this "meta") k)] (f this)))
   ([this k args]
-   (when-let [f (get (get-prop this "meta") k)]
-     (apply f this args))))
+   (when-let [f (get (get-prop this "meta") k)] (apply f this args))))
 
-(defn lifecycle [k]
-  (fn [& args] (this-as this (call-some this k args))))
+(defn lifecycle [k] (fn [& args] (this-as this (call-some this k args))))
 
 (def wrapper-cache (atom {}))
 
-(defn make-wrapper [f]
-  (let [display-name (-> f meta (get :component/display-name) (or (.-name f) "CarbonWrapper"))
+(defn make-wrapper
+  [f]
+  (let [display-name (-> f
+                         meta
+                         (get :component/display-name)
+                         (or (.-name f) "CarbonWrapper"))
         ;; Create constructor that extends Component
         ctor (fn [props context]
-               (this-as this
-                 (.call Component this props context)
-                 this))
+               (this-as this (.call Component this props context) this))
         proto (js/Object.create (.-prototype Component))]
     ;; Set up prototype chain
     (set! (.-prototype ctor) proto)
     (set! (.-constructor proto) ctor)
     (set! (.-displayName ctor) display-name)
-
     ;; componentWillMount
     (set! (.-componentWillMount proto)
           (fn []
             (this-as this
-              (call-some this :component-will-mount)
-              (let [args (get-prop this :args)
-                    path (conj (get-prop this :parent-path) (next-id))
-                    view (rx/cell f)
-                    args (rx/cell args)
-                    component (rx/rx (apply @view @args))
-                    form @component]
-                (when (fn? form)
-                  (reset! view form))
-                (set! (.-state this)
-                      #js {:component component
-                           :path path
-                           :view view
-                           :args args})))))
-
+                     (call-some this :component-will-mount)
+                     (let [args (get-prop this :args)
+                           path (conj (get-prop this :parent-path) (next-id))
+                           view (rx/cell f)
+                           args (rx/cell args)
+                           component (rx/rx (apply @view @args))
+                           form @component]
+                       (when (fn? form) (reset! view form))
+                       (set! (.-state this)
+                             #js {:component component,
+                                  :path path,
+                                  :view view,
+                                  :args args})))))
     ;; componentDidMount - add watch after component is mounted to DOM
     (set! (.-componentDidMount proto)
           (fn []
-            (this-as this
+            (this-as
+              this
               (let [component (get-state this :component)
                     path (get-state this :path)]
                 (add-watch component ::render #(request-render path this)))
               (call-some this :component-did-mount))))
-
-    ;; shouldComponentUpdate - always false since reactive updates bypass this
+    ;; shouldComponentUpdate - always false since reactive updates bypass
+    ;; this
     (set! (.-shouldComponentUpdate proto) (constantly false))
-
     ;; componentWillReceiveProps
     (set! (.-componentWillReceiveProps proto)
           (fn [next-props]
             (this-as this
-              (call-some this :component-will-receive-props)
-              (let [next-args (obj/get next-props "args")
-                    args (get-state this :args)]
-                (reset! args next-args)))))
-
+                     (call-some this :component-will-receive-props)
+                     (let [next-args (obj/get next-props "args")
+                           args (get-state this :args)]
+                       (reset! args next-args)))))
     ;; componentWillUpdate
     (set! (.-componentWillUpdate proto) (lifecycle :component-will-update))
-
     ;; componentDidUpdate
     (set! (.-componentDidUpdate proto) (lifecycle :component-did-update))
-
     ;; componentWillUnmount
     (set! (.-componentWillUnmount proto)
           (fn []
             (this-as this
-              (remove-watch (get-state this :component) ::render)
-              (call-some this :component-will-unmount))))
-
+                     (remove-watch (get-state this :component) ::render)
+                     (call-some this :component-will-unmount))))
     ;; componentDidUnmount
     (set! (.-componentDidUnmount proto) (lifecycle :component-did-unmount))
-
     ;; render
     (set! (.-render proto)
           (fn []
             (this-as this
-              (rx/no-rx
-                (binding [*path* (get-state this :path)]
-                  (process @(get-state this :component)))))))
-
+                     (rx/no-rx (binding [*path* (get-state this :path)]
+                                 (process @(get-state this :component)))))))
     ctor))
 
-(defn get-wrapper [f]
+(defn get-wrapper
+  [f]
   (if-let [c (get @wrapper-cache f)]
     c
     (let [c (make-wrapper f)]
       (swap! wrapper-cache assoc f c)
       c)))
 
-(defn component [f args meta]
+(defn component
+  [f args meta]
   (h (get-wrapper f)
-                #js {:args args
-                     :key (get meta :key)
-                     :ref (get meta :ref)
-                     :meta meta
-                     :parent-path *path*}))
+     #js {:args args,
+          :key (get meta :key),
+          :ref (get meta :ref),
+          :meta meta,
+          :parent-path *path*}))
 
-(defn mount [view elem]
-  (inferno/render (process view) elem))
+(defn mount [view elem] (inferno/render (process view) elem))
 
 ;;; Render batching
 
@@ -231,16 +208,15 @@
 (def empty-queue (sorted-map))
 (def render-queue (volatile! empty-queue))
 
-(defn render []
+(defn render
+  []
   (let [queue @render-queue]
     (vreset! render-queue empty-queue)
-    (doseq [c (vals queue)]
-      (.forceUpdate c))))
+    (doseq [c (vals queue)] (.forceUpdate c))))
 
-(defn request-render [path c]
-  (when (empty? @render-queue)
-    (schedule render))
+(defn request-render
+  [path c]
+  (when (empty? @render-queue) (schedule render))
   (vswap! render-queue assoc path c))
 
-(defn clear-render [path]
-  (vswap! render-queue dissoc path))
+(defn clear-render [path] (vswap! render-queue dissoc path))

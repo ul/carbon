@@ -1,6 +1,5 @@
 (ns user
-  (:require
-   [figwheel-sidecar.repl-api :as f]))
+  (:require [figwheel-sidecar.repl-api :as f]))
 
 ;; user is a namespace that the Clojure runtime looks for and
 ;; loads if its available
@@ -11,7 +10,8 @@
 ;; The definitions in here will be available if you run "lein repl" or launch a
 ;; Clojure repl some other way
 
-;; You have to ensure that the libraries you :require are listed in your dependencies
+;; You have to ensure that the libraries you :require are listed in your
+;; dependencies
 
 ;; Once you start down this path
 ;; you will probably want to look at
@@ -22,11 +22,10 @@
 (defn fig-start
   "This starts the figwheel server and watch based auto-compiler."
   []
-  ;; this call will only work are long as your :cljsbuild and
-  ;; :figwheel configurations are at the top level of your project.clj
-  ;; and are not spread across different lein profiles
-
-  ;; otherwise you can pass a configuration into start-figwheel! manually
+  ;; this call will only work are long as your :cljsbuild and :figwheel
+  ;; configurations are at the top level of your project.clj and are not
+  ;; spread across different lein profiles otherwise you can pass a
+  ;; configuration into start-figwheel! manually
   (f/start-figwheel!))
 
 (defn fig-stop
