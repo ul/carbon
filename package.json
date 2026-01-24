@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "inferno": "^9.0.10",
-    "inferno-create-class": "^8.2.3",
     "inferno-hyperscript": "^9.0.10"
   }
 }

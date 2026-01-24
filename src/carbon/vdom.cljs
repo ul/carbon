@@ -1,7 +1,6 @@
 (ns carbon.vdom
-  (:require ["inferno" :as inferno]
+  (:require ["inferno" :as inferno :refer [Component]]
             ["inferno-hyperscript" :refer [h]]
-            ["inferno-create-class" :refer [createClass]]
             [goog.object :as obj]
             [carbon.rx :as rx :include-macros true]
             [clojure.string :as str]))
@@ -122,62 +121,83 @@
 (def wrapper-cache (atom {}))
 
 (defn make-wrapper [f]
-  (createClass
-   #js {:displayName
-        (-> f meta (get :component/display-name) (or (.-name f) "CarbonWrapper"))
+  (let [display-name (-> f meta (get :component/display-name) (or (.-name f) "CarbonWrapper"))
+        ;; Create constructor that extends Component
+        ctor (fn [props context]
+               (this-as this
+                 (.call Component this props context)
+                 this))
+        proto (js/Object.create (.-prototype Component))]
+    ;; Set up prototype chain
+    (set! (.-prototype ctor) proto)
+    (set! (.-constructor proto) ctor)
+    (set! (.-displayName ctor) display-name)
 
-        :componentWillMount
-        (fn []
-          (this-as this
-                   (call-some this :component-will-mount)
-                   (let [args (get-prop this :args)
-                         path (conj (get-prop this :parent-path) (next-id))
-                         view (rx/cell f)
-                         args (rx/cell args)
-                         component (rx/rx (apply @view @args))
-                         form @component]
-                     (when (fn? form)
-                       (reset! view form))
-                     ((obj/get this "setState")
+    ;; componentWillMount
+    (set! (.-componentWillMount proto)
+          (fn []
+            (this-as this
+              (call-some this :component-will-mount)
+              (let [args (get-prop this :args)
+                    path (conj (get-prop this :parent-path) (next-id))
+                    view (rx/cell f)
+                    args (rx/cell args)
+                    component (rx/rx (apply @view @args))
+                    form @component]
+                (when (fn? form)
+                  (reset! view form))
+                (set! (.-state this)
                       #js {:component component
                            :path path
                            :view view
-                           :args args})
-                     (add-watch component ::render #(request-render path this)))))
+                           :args args})))))
 
-        :componentDidMount
-        (lifecycle :component-did-mount)
+    ;; componentDidMount - add watch after component is mounted to DOM
+    (set! (.-componentDidMount proto)
+          (fn []
+            (this-as this
+              (let [component (get-state this :component)
+                    path (get-state this :path)]
+                (add-watch component ::render #(request-render path this)))
+              (call-some this :component-did-mount))))
 
-        :componentShouldUpdate
-        (constantly false)
+    ;; shouldComponentUpdate - always false since reactive updates bypass this
+    (set! (.-shouldComponentUpdate proto) (constantly false))
 
-        :componentWillReceiveProps
-        (fn [next-props]
-          (this-as this
-                   (call-some this :component-will-receive-props)
-                   (let [next-args (obj/get next-props "args")
-                         args (get-state this :args)]
-                     (reset! args next-args))))
+    ;; componentWillReceiveProps
+    (set! (.-componentWillReceiveProps proto)
+          (fn [next-props]
+            (this-as this
+              (call-some this :component-will-receive-props)
+              (let [next-args (obj/get next-props "args")
+                    args (get-state this :args)]
+                (reset! args next-args)))))
 
-        :componentWillUpdate
-        (lifecycle :component-will-update)
+    ;; componentWillUpdate
+    (set! (.-componentWillUpdate proto) (lifecycle :component-will-update))
 
-        :componentDidUpdate
-        (lifecycle :component-did-update)
+    ;; componentDidUpdate
+    (set! (.-componentDidUpdate proto) (lifecycle :component-did-update))
 
-        :componentWillUnmount
-        #(this-as this
-                  (remove-watch (get-state this :component) ::render)
-                  (call-some this :component-will-unmount))
+    ;; componentWillUnmount
+    (set! (.-componentWillUnmount proto)
+          (fn []
+            (this-as this
+              (remove-watch (get-state this :component) ::render)
+              (call-some this :component-will-unmount))))
 
-        :componentDidUnmount
-        (lifecycle :component-did-unmount)
+    ;; componentDidUnmount
+    (set! (.-componentDidUnmount proto) (lifecycle :component-did-unmount))
 
-        :render
-        #(this-as this
-                  (rx/no-rx
-                   (binding [*path* (get-state this :path)]
-                     (process @(get-state this :component)))))}))
+    ;; render
+    (set! (.-render proto)
+          (fn []
+            (this-as this
+              (rx/no-rx
+                (binding [*path* (get-state this :path)]
+                  (process @(get-state this :component)))))))
+
+    ctor))
 
 (defn get-wrapper [f]
   (if-let [c (get @wrapper-cache f)]
@@ -215,7 +235,7 @@
   (let [queue @render-queue]
     (vreset! render-queue empty-queue)
     (doseq [c (vals queue)]
-      ((obj/get c "forceUpdate")))))
+      (.forceUpdate c))))
 
 (defn request-render [path c]
   (when (empty? @render-queue)
