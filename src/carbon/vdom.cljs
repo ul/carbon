@@ -1,5 +1,5 @@
 (ns carbon.vdom
-  (:require ["inferno" :as inferno :refer [Component]]
+  (:require ["inferno" :as inferno :refer [Component Fragment]]
             ["inferno-hyperscript" :refer [h]]
             [goog.object :as obj]
             [carbon.rx :as rx :include-macros true]
@@ -74,7 +74,7 @@
         (seq? arg) (->> arg
                         flatten-children
                         (map process)
-                        (node :div {}))
+                        (node Fragment {}))
         :else (str arg)))
 
 (defn get-prop [this k] (obj/getValueByKeys this "props" (name k)))
