@@ -35,46 +35,46 @@
 (defn filter-vals [p m] (reduce-kv (fn [m k v] (if (p v) m (dissoc m k))) m m))
 
 (defn flatten-children
-  [children]
-  (->> children
-       (tree-seq seq? seq)
-       (remove seq?)
-       (remove nil?)))
+  ([children] (flatten-children children (array)))
+  ([children ^js out]
+   (doseq [c children]
+     (cond (seq? c) (flatten-children c out)
+           (some? c) (.push out c)))
+   out))
 
 (defn valid-tag? [tag] (or (keyword? tag) (string? tag)))
 
-(defn dealias [{:keys [class], :as m}] (if class (assoc m :className class) m))
+(defn attrs->js
+  [m]
+  (let [obj (js-obj)]
+    (doseq [[k v] m]
+      (when (some? v)
+        (let [k (if (= k :class) "className" (camel-event-handlers k))]
+          (unchecked-set obj k (clj->js v)))))
+    obj))
 
-(defn node
-  [tag attrs children]
-  (h (name tag)
-     (->> attrs
-          (filter-vals some?)
-          (dealias)
-          (map-keys camel-event-handlers)
-          clj->js)
-     (apply array children)))
+(defn node [tag attrs children] (h (name tag) (attrs->js attrs) children))
 
 (defn parse-arg
   [[tag & [attrs & children :as args]]]
   (let [full? (map? attrs)] [tag (if full? attrs {}) (if full? children args)]))
 
-(declare component request-render clear-render)
+(declare process component request-render clear-render)
+
+(defn process-children
+  [children]
+  (let [^js arr (flatten-children children)]
+    (dotimes [i (.-length arr)] (aset arr i (process (aget arr i))))
+    arr))
 
 (defn process
   [arg]
   (cond (vector? arg) (let [tag (get arg 0)]
                         (if (valid-tag? tag)
                           (let [[tag attrs children] (parse-arg arg)]
-                            (->> children
-                                 flatten-children
-                                 (map process)
-                                 (node tag attrs)))
+                            (node tag attrs (process-children children)))
                           (component tag (subvec arg 1) (meta arg))))
-        (seq? arg) (->> arg
-                        flatten-children
-                        (map process)
-                        (node Fragment {}))
+        (seq? arg) (node Fragment {} (process-children arg))
         :else (str arg)))
 
 (defn get-prop [this k] (obj/getValueByKeys this "props" (name k)))

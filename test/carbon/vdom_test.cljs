@@ -2,6 +2,7 @@
   (:require [cljs.test :refer-macros [deftest testing is]]
             [carbon.vdom :as vdom]
             [clojure.string :as str]
+            [goog.object :as obj]
             ["inferno" :refer [Fragment]]))
 
 ;; ===========================================================================
@@ -152,29 +153,31 @@
     (is (not (vdom/valid-tag? {:a 1})))))
 
 ;; ---------------------------------------------------------------------------
-;; dealias
+;; attrs->js
 ;; ---------------------------------------------------------------------------
 
-(deftest dealias-maps-class-to-classname
-  (testing "adds :className when :class is present"
-    (let [result (vdom/dealias {:class "foo"})]
-      (is (= "foo" (:className result)))
-      (is (= "foo" (:class result))))))
+(deftest attrs->js-maps-class-to-classname
+  (testing "maps :class to className"
+    (let [result (vdom/attrs->js {:class "foo"})]
+      (is (= "foo" (obj/get result "className"))))))
 
-(deftest dealias-no-op-without-class
-  (testing "no-op when :class is absent"
-    (is (= {:id "foo"} (vdom/dealias {:id "foo"})))))
+(deftest attrs->js-no-op-without-class
+  (testing "passes through attrs without :class"
+    (let [result (vdom/attrs->js {:id "foo"})]
+      (is (= "foo" (obj/get result "id"))))))
 
-(deftest dealias-empty-map
-  (testing "empty map passes through" (is (= {} (vdom/dealias {})))))
+(deftest attrs->js-empty-map
+  (testing "empty map produces empty object"
+    (let [result (vdom/attrs->js {})]
+      (is (= 0 (.-length (js/Object.keys result)))))))
 
-(deftest dealias-preserves-other-attrs
-  (testing "other attributes are preserved"
-    (let [result (vdom/dealias
+(deftest attrs->js-preserves-other-attrs
+  (testing "other attributes are preserved alongside className"
+    (let [result (vdom/attrs->js
                    {:class "foo", :id "bar", :style {:color "red"}})]
-      (is (= "foo" (:className result)))
-      (is (= "bar" (:id result)))
-      (is (= {:color "red"} (:style result))))))
+      (is (= "foo" (obj/get result "className")))
+      (is (= "bar" (obj/get result "id")))
+      (is (= "red" (obj/get (obj/get result "style") "color"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; parse-arg
@@ -247,16 +250,16 @@
 
 (deftest node-creates-vnode-with-type
   (testing "creates VNode with correct tag type"
-    (let [vnode (vdom/node :div {} [])] (is (= "div" (.-type vnode))))))
+    (let [vnode (vdom/node :div {} (array))] (is (= "div" (.-type vnode))))))
 
 (deftest node-creates-vnode-with-classname
   (testing "creates VNode with className from :class alias"
-    (let [vnode (vdom/node :div {:class "foo"} [])]
+    (let [vnode (vdom/node :div {:class "foo"} (array))]
       (is (= "foo" (.-className vnode))))))
 
 (deftest node-creates-vnode-with-children
   (testing "creates VNode with string child wrapped as text VNode"
-    (let [vnode (vdom/node :div {} ["hello"])
+    (let [vnode (vdom/node :div {} (array "hello"))
           children (.-children vnode)]
       ;; Inferno wraps strings in text VNodes (flags=16, .-children is the
       ;; text)
@@ -266,25 +269,25 @@
 
 (deftest node-filters-nil-attrs
   (testing "nil attribute values are filtered out"
-    (let [vnode (vdom/node :div {:id "x", :title nil} [])]
+    (let [vnode (vdom/node :div {:id "x", :title nil} (array))]
       (is (= "x" (.. vnode -props -id))))))
 
 (deftest node-converts-event-handlers
   (testing "on- prefixed handlers are converted to camelCase"
     (let [handler (fn [])
-          vnode (vdom/node :div {:on-click handler} [])]
+          vnode (vdom/node :div {:on-click handler} (array))]
       (is (= handler (.. vnode -props -onClick))))))
 
 (deftest node-different-tags
   (testing "various HTML tags"
-    (is (= "span" (.-type (vdom/node :span {} []))))
-    (is (= "ul" (.-type (vdom/node :ul {} []))))
-    (is (= "input" (.-type (vdom/node :input {} []))))
-    (is (= "a" (.-type (vdom/node :a {} []))))))
+    (is (= "span" (.-type (vdom/node :span {} (array)))))
+    (is (= "ul" (.-type (vdom/node :ul {} (array)))))
+    (is (= "input" (.-type (vdom/node :input {} (array)))))
+    (is (= "a" (.-type (vdom/node :a {} (array)))))))
 
 (deftest node-multiple-children
   (testing "multiple children as array of text VNodes"
-    (let [vnode (vdom/node :div {} ["a" "b" "c"])
+    (let [vnode (vdom/node :div {} (array "a" "b" "c"))
           children (.-children vnode)]
       (is (array? children))
       (is (= 3 (.-length children)))
