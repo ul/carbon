@@ -88,7 +88,7 @@
 
 (defn lifecycle [k] (fn [& args] (this-as this (call-some this k args))))
 
-(def wrapper-cache (atom {}))
+(def wrapper-cache (js/WeakMap.))
 
 (defn make-wrapper
   [f]
@@ -163,11 +163,10 @@
 
 (defn get-wrapper
   [f]
-  (if-let [c (get @wrapper-cache f)]
-    c
-    (let [c (make-wrapper f)]
-      (swap! wrapper-cache assoc f c)
-      c)))
+  (or (.get wrapper-cache f)
+      (let [c (make-wrapper f)]
+        (.set wrapper-cache f c)
+        c)))
 
 (defn component
   [f args meta]
