@@ -1,4 +1,4 @@
-{:source-paths ["src" "examples/counter/src"]
+{:source-paths ["src" "test" "examples/counter/src"]
  :dependencies [[carbon/rx "0.4.0-SNAPSHOT"]]
  :compiler-options
  {:output-feature-set :es-next}
@@ -9,4 +9,11 @@
    :asset-path "js/compiled/out"
    :modules {:main {:entries [counter.core]}}
    :devtools {:http-root "examples/counter/resources/public"
-              :http-port 8080}}}}
+              :http-port 8080}}
+  :test
+  {:target :node-test
+   :output-to "target/test/node-test.js"
+   :ns-regexp "-test$"
+   :autorun true
+   :devtools {:preloads [carbon.test-setup]}
+   :compiler-options {:output-feature-set :es-next}}}}
